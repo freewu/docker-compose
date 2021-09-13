@@ -7,10 +7,10 @@ services:
       - "9003:9000"
       - "9004:9001"
     restart: always
-    command: server /data
+    command: server /data -console-address ":9001"
     environment:
-      MINIO_ACCESS_KEY: admin
-      MINIO_SECRET_KEY: admin123 #大于等于8位
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123 #大于等于8位
     logging:
       options:
         max-size: "50M" # 最大文件上传限制
