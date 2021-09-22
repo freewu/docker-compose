@@ -1,0 +1,28 @@
+version: '3'
+services:
+  elasticsearch:
+    image: elasticsearch
+    networks:
+      - net-es
+    volumes:
+      - /data/elastic-search:/usr/share/elasticsearch/data
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9200:9200"
+ 
+  elastichd:
+    image: containerize/elastichd:latest
+    networks:
+      - net-es
+    ports:
+      - "9800:9800"
+    depends_on:
+      - "elasticsearch"
+    links:
+      - "elasticsearch:demo"
+ 
+#这里要注意，es和eshd要在相同网络才能被links
+networks:
+  net-es:
+    external: false
