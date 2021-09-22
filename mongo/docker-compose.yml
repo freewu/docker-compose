@@ -1,0 +1,16 @@
+version: '3'
+services:
+  mongo:
+    image: mongo:latest
+    restart: always
+    ports:
+     - 27017:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=123456
+    volumes:
+     - /data/mongodb/data/db:/data/db # 挂载数据目录
+     - /data/mongodb/data/log:/var/log/mongodb  # 挂载日志目录
+     - ./config:/etc/mongo  # 挂载配置目录
+     - ./script/:/docker-entrypoint-initdb.d # 初始化脚本
+    command: --config ./config/mongod.conf # 配置文件
