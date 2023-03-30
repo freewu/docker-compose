@@ -1,0 +1,3 @@
+user mqtt
+topic write topic/#
+topic read topic/#
