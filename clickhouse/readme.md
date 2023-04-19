@@ -6,7 +6,8 @@
 
 # 端口
 
-    9000
+    9000 / 8123
+    
 ```
 
 ## 生成密码
@@ -14,6 +15,7 @@
 # 进入容器
 
     docker exec -it clickhouse /bin/bash
+
 # 随机8位密码
 
     PASSWORD=$(base64 < /dev/urandom | head -c8); echo "$PASSWORD"; echo -n "$PASSWORD" | sha256sum | tr -d '-'
@@ -40,4 +42,20 @@
     cd tabix
     yarn install
     yarn start
+```
+
+## 使用 clickhouse 客户端连接
+```
+# 进入容器
+
+    docker exec -it clickhouse /bin/bash
+
+# 客户端连接
+
+    clickhouse-client -h127.0.0.1 -ubluefrog -password12345678
+
+# 执行 SQL
+
+    SHOW DATABASES;
+
 ```
