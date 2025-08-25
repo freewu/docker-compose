@@ -1,0 +1,26 @@
+# version: '3'
+ 
+# services:
+#   clickhouse:
+#     image: yandex/clickhouse-server
+#     container_name: chroma
+#     restart: always
+#     # 指定网络
+#     # networks:
+#     #   - bluefrog
+#     ports:
+#       - "8123:8123"
+#       - "9000:9000"
+#     volumes:
+#       # 配置
+#       - ./config:/etc/clickhouse-server
+#       # 默认配置
+#       - /etc/localtime:/etc/localtime:ro
+#       # 运行日志
+#       - ./log:/var/log/clickhouse-server
+#       # 数据持久
+#       - ./data:/var/lib/clickhouse:rw
+ 
+# # networks:
+# #   bluefrog:
+# #     external: true
