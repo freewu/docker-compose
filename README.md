@@ -36,3 +36,4 @@
 | ElasticSearch  | elastic-search   | 9200,9800                                | 全文搜索数据库                           |
 | Clickhouse     | clickhouse       | 8123,9000                                | OLAP 数据库                             |
 | Chroma         | chroma           | -                                        | 向量数据库                               |
+| Memcached      | memcached        | 11211                                    | 内存缓存服务                             |

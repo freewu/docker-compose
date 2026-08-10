@@ -1,0 +1,16 @@
+version: '3'
+services:
+  memcached:
+    restart: always
+    image: memcached:latest
+    container_name: memcached
+    ports:
+      - "11211:11211"
+    command:
+      - "-m"
+      - "256"      # Max memory allocation in MB (default is 64MB)
+      - "-c"
+      - "1024"     # Max simultaneous connections (default is 1024)
+      - "-t"
+      - "4"        # Number of threads to use (default is 4)
+    restart: always
