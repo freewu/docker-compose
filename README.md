@@ -2,6 +2,15 @@
 
     使用 docker 构建开发环境脚本
 
+## 前置 docker-compose 安装
+### ubuntu
+```bash
+# 安装 docker-compose
+
+sudo apt-get update
+sudo apt-get install -y docker-compose
+```
+
 
 ## 使用方式
 ```
@@ -37,3 +46,23 @@
 | Clickhouse     | clickhouse       | 8123,9000                                | OLAP 数据库                             |
 | Chroma         | chroma           | -                                        | 向量数据库                               |
 | Memcached      | memcached        | 11211                                    | 内存缓存服务                             |
+| Doris          | doris            | 8041,8042,8043                           | OLAP 数据库                             |
+| MariaDB        | mariadb          | 3307                                     | 关系型数据库                             |
+
+## docker hub 镜像
+```bash
+tee /etc/docker/daemon.json <<-'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.xuanyuan.me",
+    "https://docker.1ms.run",
+    "https://docker.m.daocloud.io"
+  ]
+}
+EOF
+
+# 重载配置
+systemctl daemon-reload
+# 重启docker
+systemctl restart docker
+```
