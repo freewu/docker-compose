@@ -3,14 +3,31 @@
     使用 docker 构建开发环境脚本
 
 ## 前置 docker-compose 安装
-### ubuntu
+### 安装 docker-compose v1 (ubuntu)
 ```bash
-# 安装 docker-compose
-
+# 安装 docker-compose v1
 sudo apt-get update
 sudo apt-get install -y docker-compose
 ```
 
+### 安装 compose v2 插件（推荐，`docker compose` 空格命令）
+```bash
+# 创建系统插件目录
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+
+# 下载 compose v2 二进制（x86_64）
+sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+
+# 赋予执行权限
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+```
+
+### 独立二进制 `docker-compose`（带横杠，v2，不用 python，避开 distutils 报错）
+```bash
+sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
 
 ## 使用方式
 ```
@@ -20,7 +37,10 @@ sudo apt-get install -y docker-compose
 
 # 启动 
 
-    docker-compose up -d
+    # 旧版本启动方式
+    #docker-compose up -d
+    # 新版本启动方式
+    docker compose up -d
     
 ```
 
