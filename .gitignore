@@ -1,3 +1,6 @@
 **/**.log
 **/**.db
 /mosquitto/log/*.pid
+
+# Windows 重定向/保留设备名产生的垃圾文件
+nul
