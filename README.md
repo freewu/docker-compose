@@ -44,6 +44,10 @@ sudo chmod +x /usr/local/bin/docker-compose
     
 ```
 
+> 注意：`redis-sentinel`、`redis-cluster` 需要 `HOST_IP`（宿主机局域网 IP），不能是 `127.0.0.1`。
+> `redis-cluster` 已提供脚本自动探测并写入 `.env`：`cd redis-cluster && ./set-host-ip.sh`
+> `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.1.4 && docker compose up -d`
+
 ## 支持服务
 
 | 服务名称        | 目录名称           | 占用端口                                  | 说明                                    |

@@ -12,6 +12,7 @@ redis-node-4       | 7004      | 17004       | /data/redis-cluster/node-7004    
 redis-node-5       | 7005      | 17005       | /data/redis-cluster/node-7005    | 从节点2 (node-2 的副本)
 redis-node-6       | 7006      | 17006       | /data/redis-cluster/node-7006    | 从节点3 (node-3 的副本)
 redis-cluster-init | -         | -           | -                                | 一次性初始化集群，执行完自动退出(正常现象)
+set-host-ip.sh     | -         | -           | -                                | 辅助脚本：探测宿主机 IP 并写入 .env 的 HOST_IP
 
     集群总线端口 = 客户端端口 + 10000，必须一起对外开放，否则节点之间无法通信。
     主从对应关系由 redis-cli --cluster create 自动分配，以 cluster nodes 输出为准。
@@ -30,21 +31,38 @@ redis-cluster-init | -         | -           | -                                
 
 ### 1. 配置 HOST_IP（必做）
 
-集群节点会用 `HOST_IP` 作为对外通告的地址，必须是**宿主机局域网 IP**（如 `192.168.1.60`），
+集群节点会用 `HOST_IP` 作为对外通告的地址，必须是**宿主机局域网 IP**（如 `192.168.1.4`），
 不能是 `127.0.0.1`：6 个节点是独立容器，用 `127.0.0.1` 会导致节点互相连不上、客户端重定向(MOVED)失败。
 
-```bash
-# Windows 查看 IPv4 地址
-ipconfig
+直接用脚本探测并写入 `.env`（建议每次启动前跑一次）：
 
-# Linux 查看
-hostname -I
+```bash
+cd redis-cluster
+
+./set-host-ip.sh                # 自动探测本机 IP 并写入 .env（WSL 下取 Windows 宿主机默认路由网卡 IP）
+./set-host-ip.sh --print        # 只打印探测结果，不写入
+./set-host-ip.sh 192.168.1.60   # 自动探测不准时，手动指定
 ```
 
-把 IP 填到 `redis-cluster/.env`：
+脚本内置探测顺序：
+
+```
+WSL(Docker Desktop) 下 → 调用 powershell 取 Windows 默认路由网卡 IPv4
+其它 Linux        → ip -4 route get 1.1.1.1 的 src，兜底 hostname -I
+macOS             → ipconfig getifaddr en0
+过滤掉 127.* / 169.254.* / 172.16-31.*(docker、WSL、Hyper-V 网段) / 192.168.122.*(libvirt)
+```
+
+执行后 `.env` 里的内容形如：
 
 ```bash
-HOST_IP=192.168.1.60
+HOST_IP=192.168.1.4
+```
+
+IP 变化时脚本会提示重建集群（节点会把旧地址记录在 `nodes.conf` 里）：
+
+```bash
+docker compose down && sudo rm -rf /data/redis-cluster/* && docker compose up -d
 ```
 
 ### 2. 启动
