@@ -47,6 +47,9 @@ sudo chmod +x /usr/local/bin/docker-compose
 > 注意：`redis-sentinel`、`redis-cluster` 需要 `HOST_IP`（宿主机局域网 IP），不能是 `127.0.0.1`。
 > `redis-cluster` 已提供脚本自动探测并写入 `.env`：`cd redis-cluster && ./set-host-ip.sh`
 > `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.1.4 && docker compose up -d`
+>
+> 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
+> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）。
 
 ## 支持服务
 
@@ -68,10 +71,10 @@ sudo chmod +x /usr/local/bin/docker-compose
 | InfluxDB       | influxdb         | 8086,8083                                | 时序数据库                              |
 | Etcd           | etcd             | -                                        | 分布式 Key-Value 存储                   |
 | ElasticSearch  | elastic-search   | 9200,9800                                | 全文搜索数据库                           |
-| Clickhouse     | clickhouse       | 8123,9000                                | OLAP 数据库                             |
+| Clickhouse     | clickhouse       | 8123,9000                                | OLAP 数据库（账号密码由 .env 提供，默认 bluefrog / 12345678）|
 | Chroma         | chroma           | -                                        | 向量数据库                               |
 | Memcached      | memcached        | 11211                                    | 内存缓存服务                             |
-| Doris          | doris            | 8041,8042,8043                           | OLAP 数据库                             |
+| Doris          | doris            | 8031,8032,8033,9031,9032,9033,8041,8042,8043 | OLAP 数据库（root 密码由 .env 提供，默认 123456）|
 | MariaDB        | mariadb          | 3307                                     | 关系型数据库                             |
 
 ## docker hub 镜像

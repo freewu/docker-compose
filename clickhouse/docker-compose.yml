@@ -11,6 +11,14 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    environment:
+      # 账号/密码从外部 .env 读取（见同目录 .env），容器启动时自动生成用户
+      CLICKHOUSE_USER: "${CLICKHOUSE_USER:?请在 clickhouse/.env 中配置 CLICKHOUSE_USER}"
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:?请在 clickhouse/.env 中配置 CLICKHOUSE_PASSWORD}"
+      # 可选：启动时自动创建的数据库，留空则不创建
+      CLICKHOUSE_DB: "${CLICKHOUSE_DB:-}"
+      # 允许该账号管理用户/权限（1=允许）
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT:-1}"
     volumes:
       # 配置
       - ./config:/etc/clickhouse-server

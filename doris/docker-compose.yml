@@ -124,6 +124,26 @@ services:
     networks:
       doris_net:
         ipv4_address: 172.20.80.7
+  # 设置/重置 Doris root 密码（账号密码见同目录 .env），执行完自动退出属正常现象
+  doris-init:
+    image: "mysql:8.4.11"
+    container_name: "doris-init"
+    restart: "no"
+    depends_on:
+      - docker-fe-01
+      - docker-fe-02
+      - docker-fe-03
+    environment:
+      # 固定连主 FE（docker-fe-01 / FE_ID=1 / 172.20.80.2）
+      - FE_HOST=172.20.80.2
+      - FE_PORT=9030
+      - DORIS_ROOT_USER=${DORIS_ROOT_USER:-root}
+      - DORIS_ROOT_PASSWORD=${DORIS_ROOT_PASSWORD:?请在 doris/.env 中配置 DORIS_ROOT_PASSWORD}
+    volumes:
+      - ./init/set-root-password.sh:/init/set-root-password.sh:ro
+    command: ["sh", "/init/set-root-password.sh"]
+    networks:
+      - doris_net
 networks:
   doris_net:
     ipam:

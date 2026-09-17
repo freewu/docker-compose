@@ -88,7 +88,9 @@
                  All results of DNS requests are cached till server restart.
             -->
             <networks>
-                <ip>::/0</ip>
+                <!-- 只允许本机/容器内访问；外部访问请使用 .env 中配置的 CLICKHOUSE_USER 账号 -->
+                <ip>::1</ip>
+                <ip>127.0.0.1</ip>
             </networks>
 
             <!-- Settings profile for user. -->
@@ -100,17 +102,10 @@
             <!-- User can create other users and grant rights to them. -->
             <!-- <access_management>1</access_management> -->
         </default>
-        <bluefrog>
-            <password_sha256_hex>ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f</password_sha256_hex>
-            <networks incl="networks" replace="replace">
-                <ip>::/0</ip>
-            </networks>
-            <profile>default</profile>
-            <quota>default</quota>
-            <allow_databases>
-                <database>default</database>
-            </allow_databases>
-        </bluefrog>
+        <!-- 业务账号（用户名/密码）不写死在这里，由 docker-compose 传入的环境变量
+             CLICKHOUSE_USER / CLICKHOUSE_PASSWORD（取值见 clickhouse/.env）在容器启动时
+             生成到 users.d/default-user.xml，同时删除上面的 default 用户。
+             如需额外固定账号，可在 config/users.d/ 下自行新增 xml 文件。 -->
     </users>
 
     <!-- Quotas. -->
