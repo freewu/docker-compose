@@ -3,8 +3,8 @@ services:
   redis:
     image: redis
     container_name: redis
-    #command: redis-server --requirepass 123456
-    command: redis-server 
+    # 密码可在 Readme.md 中查看（123456）；需要无密码访问时改成 command: redis-server
+    command: redis-server --requirepass 123456
     restart: always
     ports:
       - 6379:6379

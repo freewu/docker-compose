@@ -1,0 +1,219 @@
+# Redis Cluster 集群（3 主 3 从，共 6 个节点），开启密码认证
+#
+# 端口：客户端 7001-7006，集群总线 17001-17006（总线端口 = 客户端端口 + 10000）
+#       与仓库内其它服务（6379/6380/6381、26379-26381 ...）不冲突
+# 使用前请先按 Readme.md 配置 .env 中的 HOST_IP（宿主机局域网 IP）
+#
+# HOST_IP 说明：集群节点会把 HOST_IP 作为自己对外通告的地址，
+#   必须同时满足「容器之间能访问」和「宿主机上的客户端能访问」，所以不能用 127.0.0.1
+
+services:
+
+  # ---------------- 节点 1 ----------------
+  redis-node-1:
+    image: redis:latest
+    container_name: redis-node-1
+    hostname: redis-node-1
+    restart: always
+    ports:
+      - "7001:7001"     # 客户端端口
+      - "17001:17001"   # 集群总线端口
+    volumes:
+      - /data/redis-cluster/node-7001:/data
+    command:
+      [
+        "redis-server",
+        "--port", "7001",
+        "--cluster-enabled", "yes",
+        "--cluster-config-file", "nodes.conf",
+        "--cluster-node-timeout", "5000",
+        "--cluster-announce-ip", "${HOST_IP:?请在 redis-cluster/.env 中配置 HOST_IP=宿主机局域网IP}",
+        "--cluster-announce-port", "7001",
+        "--cluster-announce-bus-port", "17001",
+        "--appendonly", "yes",
+        "--requirepass", "123456",
+        "--masterauth", "123456"
+      ]
+    networks:
+      - redis-cluster-net
+
+  # ---------------- 节点 2 ----------------
+  redis-node-2:
+    image: redis:latest
+    container_name: redis-node-2
+    hostname: redis-node-2
+    restart: always
+    ports:
+      - "7002:7002"
+      - "17002:17002"
+    volumes:
+      - /data/redis-cluster/node-7002:/data
+    command:
+      [
+        "redis-server",
+        "--port", "7002",
+        "--cluster-enabled", "yes",
+        "--cluster-config-file", "nodes.conf",
+        "--cluster-node-timeout", "5000",
+        "--cluster-announce-ip", "${HOST_IP:?请在 redis-cluster/.env 中配置 HOST_IP=宿主机局域网IP}",
+        "--cluster-announce-port", "7002",
+        "--cluster-announce-bus-port", "17002",
+        "--appendonly", "yes",
+        "--requirepass", "123456",
+        "--masterauth", "123456"
+      ]
+    networks:
+      - redis-cluster-net
+
+  # ---------------- 节点 3 ----------------
+  redis-node-3:
+    image: redis:latest
+    container_name: redis-node-3
+    hostname: redis-node-3
+    restart: always
+    ports:
+      - "7003:7003"
+      - "17003:17003"
+    volumes:
+      - /data/redis-cluster/node-7003:/data
+    command:
+      [
+        "redis-server",
+        "--port", "7003",
+        "--cluster-enabled", "yes",
+        "--cluster-config-file", "nodes.conf",
+        "--cluster-node-timeout", "5000",
+        "--cluster-announce-ip", "${HOST_IP:?请在 redis-cluster/.env 中配置 HOST_IP=宿主机局域网IP}",
+        "--cluster-announce-port", "7003",
+        "--cluster-announce-bus-port", "17003",
+        "--appendonly", "yes",
+        "--requirepass", "123456",
+        "--masterauth", "123456"
+      ]
+    networks:
+      - redis-cluster-net
+
+  # ---------------- 节点 4 ----------------
+  redis-node-4:
+    image: redis:latest
+    container_name: redis-node-4
+    hostname: redis-node-4
+    restart: always
+    ports:
+      - "7004:7004"
+      - "17004:17004"
+    volumes:
+      - /data/redis-cluster/node-7004:/data
+    command:
+      [
+        "redis-server",
+        "--port", "7004",
+        "--cluster-enabled", "yes",
+        "--cluster-config-file", "nodes.conf",
+        "--cluster-node-timeout", "5000",
+        "--cluster-announce-ip", "${HOST_IP:?请在 redis-cluster/.env 中配置 HOST_IP=宿主机局域网IP}",
+        "--cluster-announce-port", "7004",
+        "--cluster-announce-bus-port", "17004",
+        "--appendonly", "yes",
+        "--requirepass", "123456",
+        "--masterauth", "123456"
+      ]
+    networks:
+      - redis-cluster-net
+
+  # ---------------- 节点 5 ----------------
+  redis-node-5:
+    image: redis:latest
+    container_name: redis-node-5
+    hostname: redis-node-5
+    restart: always
+    ports:
+      - "7005:7005"
+      - "17005:17005"
+    volumes:
+      - /data/redis-cluster/node-7005:/data
+    command:
+      [
+        "redis-server",
+        "--port", "7005",
+        "--cluster-enabled", "yes",
+        "--cluster-config-file", "nodes.conf",
+        "--cluster-node-timeout", "5000",
+        "--cluster-announce-ip", "${HOST_IP:?请在 redis-cluster/.env 中配置 HOST_IP=宿主机局域网IP}",
+        "--cluster-announce-port", "7005",
+        "--cluster-announce-bus-port", "17005",
+        "--appendonly", "yes",
+        "--requirepass", "123456",
+        "--masterauth", "123456"
+      ]
+    networks:
+      - redis-cluster-net
+
+  # ---------------- 节点 6 ----------------
+  redis-node-6:
+    image: redis:latest
+    container_name: redis-node-6
+    hostname: redis-node-6
+    restart: always
+    ports:
+      - "7006:7006"
+      - "17006:17006"
+    volumes:
+      - /data/redis-cluster/node-7006:/data
+    command:
+      [
+        "redis-server",
+        "--port", "7006",
+        "--cluster-enabled", "yes",
+        "--cluster-config-file", "nodes.conf",
+        "--cluster-node-timeout", "5000",
+        "--cluster-announce-ip", "${HOST_IP:?请在 redis-cluster/.env 中配置 HOST_IP=宿主机局域网IP}",
+        "--cluster-announce-port", "7006",
+        "--cluster-announce-bus-port", "17006",
+        "--appendonly", "yes",
+        "--requirepass", "123456",
+        "--masterauth", "123456"
+      ]
+    networks:
+      - redis-cluster-net
+
+  # ---------------- 集群初始化（执行完自动退出，属正常现象） ----------------
+  # 6 个节点就绪后执行 redis-cli --cluster create，创建 3 主 3 从并分配 16384 个槽位
+  # 已初始化过（nodes.conf 已存在）会自动跳过
+  redis-cluster-init:
+    image: redis:latest
+    container_name: redis-cluster-init
+    restart: "no"
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    environment:
+      REDISCLI_AUTH: "123456"
+    command:
+      - sh
+      - -c
+      - |
+        echo "等待 redis 节点就绪 ..."
+        timeout 60 sh -c 'until redis-cli -h ${HOST_IP} -p 7001 ping > /dev/null 2>&1; do sleep 1; done' \
+          || { echo "等待节点超时，请检查 .env 中的 HOST_IP"; exit 1; }
+
+        if redis-cli -h ${HOST_IP} -p 7001 cluster info 2>/dev/null | grep -q 'cluster_state:ok'; then
+          echo "集群已存在，跳过初始化"
+          exit 0
+        fi
+
+        redis-cli --cluster create \
+          ${HOST_IP}:7001 ${HOST_IP}:7002 ${HOST_IP}:7003 \
+          ${HOST_IP}:7004 ${HOST_IP}:7005 ${HOST_IP}:7006 \
+          --cluster-replicas 1 --cluster-yes \
+          || echo "初始化失败：若节点已有数据(不是空实例)会创建失败，请先清空 /data/redis-cluster/* 重试；否则请确认 .env 里的 HOST_IP 是宿主机可访问的局域网 IP（不能是 127.0.0.1）"
+    networks:
+      - redis-cluster-net
+
+networks:
+  redis-cluster-net:
+    driver: bridge

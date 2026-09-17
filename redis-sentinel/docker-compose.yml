@@ -21,6 +21,10 @@ services:
         "${HOST_IP}",
         "--replica-announce-port",
         "6379",
+        "--requirepass",
+        "123456",
+        "--masterauth",
+        "123456",
         "--protected-mode",
         "no"
       ]
@@ -53,6 +57,10 @@ services:
         "${HOST_IP}",
         "--replica-announce-port",
         "6380",
+        "--requirepass",
+        "123456",
+        "--masterauth",
+        "123456",
         "--protected-mode",
         "no"
       ]
@@ -85,6 +93,10 @@ services:
         "${HOST_IP}",
         "--replica-announce-port",
         "6381",
+        "--requirepass",
+        "123456",
+        "--masterauth",
+        "123456",
         "--protected-mode",
         "no"
       ]
@@ -104,6 +116,8 @@ services:
     command: >
       sh -c 'echo "bind 0.0.0.0" > /etc/sentinel.conf &&
             echo "sentinel monitor mymaster ${HOST_IP} 6379 2" >> /etc/sentinel.conf &&
+            echo "requirepass 123456" >> /etc/sentinel.conf &&
+            echo "sentinel auth-pass mymaster 123456" >> /etc/sentinel.conf &&
             echo "sentinel resolve-hostnames yes" >> /etc/sentinel.conf &&
             echo "sentinel down-after-milliseconds mymaster 10000" >> /etc/sentinel.conf &&
             echo "sentinel failover-timeout mymaster 10000" >> /etc/sentinel.conf &&
@@ -125,6 +139,8 @@ services:
     command: >
       sh -c 'echo "bind 0.0.0.0" > /etc/sentinel.conf &&
             echo "sentinel monitor mymaster ${HOST_IP} 6379 2" >> /etc/sentinel.conf &&
+            echo "requirepass 123456" >> /etc/sentinel.conf &&
+            echo "sentinel auth-pass mymaster 123456" >> /etc/sentinel.conf &&
             echo "sentinel resolve-hostnames yes" >> /etc/sentinel.conf &&
             echo "sentinel down-after-milliseconds mymaster 10000" >> /etc/sentinel.conf &&
             echo "sentinel failover-timeout mymaster 10000" >> /etc/sentinel.conf &&
@@ -145,6 +161,8 @@ services:
     command: >
       sh -c 'echo "bind 0.0.0.0" > /etc/sentinel.conf &&
             echo "sentinel monitor mymaster ${HOST_IP} 6379 2" >> /etc/sentinel.conf &&
+            echo "requirepass 123456" >> /etc/sentinel.conf &&
+            echo "sentinel auth-pass mymaster 123456" >> /etc/sentinel.conf &&
             echo "sentinel resolve-hostnames yes" >> /etc/sentinel.conf &&
             echo "sentinel down-after-milliseconds mymaster 10000" >> /etc/sentinel.conf &&
             echo "sentinel failover-timeout mymaster 10000" >> /etc/sentinel.conf &&

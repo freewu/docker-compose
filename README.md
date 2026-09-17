@@ -48,8 +48,9 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 | 服务名称        | 目录名称           | 占用端口                                  | 说明                                    |
 |----------------|------------------|------------------------------------------|----------------------------------------|
-| Redis          | redis            | 6379                                     | NoSql 数据库                            |
-| Redis-Sentinel | redis-sentinel   | 26379,26380,26381,5540,6379,6380,6381    | NoSql 数据库 Redis 哨兵模式              |
+| Redis          | redis            | 6379                                     | NoSql 数据库（密码 123456）              |
+| Redis-Sentinel | redis-sentinel   | 26379,26380,26381,5540,6379,6380,6381    | NoSql 数据库 Redis 哨兵模式（密码 123456）|
+| Redis-Cluster  | redis-cluster    | 7001,7002,7003,7004,7005,7006,17001,17002,17003,17004,17005,17006 | NoSql 数据库 Redis 集群模式 3主3从（密码 123456）|
 | MySQL          | mysql            | 3306                                     | RMDBS 关系型数据库                       |
 | PostgreSQL     | postgre          | 5432                                     | RMDBS 关系型数据库                       |
 | RabbitMQ       | rabbitmq         | 15672,5672                               | 消息队列                                |
