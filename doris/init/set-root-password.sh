@@ -30,17 +30,21 @@ case "$ROOT_PASSWORD$ROOT_USER" in
 esac
 
 # $1=密码（空表示无密码） $2=SQL
-# 成功返回 0；失败返回 1，并把 mysql 的错误信息写入 MYSQL_ERR
+# 成功/失败看 mysql 的退出码（stderr 上可能还有 "Using a password ..." 之类的警告，不能当失败）；
+# 失败时把错误信息写入 MYSQL_ERR，用于区分是连不上还是密码不对
 MYSQL_ERR=""
 mysql_run() {
+    local rc
     if [ -n "$1" ]; then
         MYSQL_ERR=$(mysql -h"$FE_HOST" -P"$FE_PORT" -u"$ROOT_USER" -p"$1" \
             --connect-timeout=5 --batch --skip-column-names -e "$2" 2>&1 >/dev/null)
+        rc=$?
     else
         MYSQL_ERR=$(mysql -h"$FE_HOST" -P"$FE_PORT" -u"$ROOT_USER" \
             --connect-timeout=5 --batch --skip-column-names -e "$2" 2>&1 >/dev/null)
+        rc=$?
     fi
-    [ -z "$MYSQL_ERR" ]
+    [ "$rc" -eq 0 ]
 }
 
 log "等待 FE ${FE_HOST}:${FE_PORT} 就绪 ..."

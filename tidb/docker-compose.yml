@@ -1,0 +1,84 @@
+# TiDB 单机版：1 个 PD + 1 个 TiKV + 1 个 TiDB Server（账号密码见同目录 .env）
+#
+# 组件端口（宿主机映射 1:1）：
+#   PD       2379 客户端端口 / 2380 集群内部端口
+#   TiKV     20160 服务端口 / 20180 状态端口
+#   TiDB     4000  MySQL 协议端口 / 10080 状态端口
+#
+# 三个组件的镜像版本要保持一致；若提示 manifest unknown，换成本仓库验证过的其它版本即可
+# （如 v8.5.5、v7.5.8，pd/tikv/tidb 必须同一个版本号）
+services:
+  pd:
+    image: pingcap/pd:v8.5.8
+    container_name: tidb-pd
+    restart: always
+    command:
+      - --name=pd
+      - --client-urls=http://0.0.0.0:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-client-urls=http://pd:2379
+      - --advertise-peer-urls=http://pd:2380
+      - --initial-cluster=pd=http://pd:2380
+      - --data-dir=/data/pd
+      - --log-file=/data/pd.log
+    ports:
+      - 2379:2379
+      - 2380:2380
+    volumes:
+      # PD 数据（存集群元信息）
+      - /data/tidb/pd:/data
+      - /etc/localtime:/etc/localtime:ro
+  tikv:
+    image: pingcap/tikv:v8.5.8
+    container_name: tidb-tikv
+    restart: always
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv:20160
+      - --status-addr=0.0.0.0:20180
+      - --pd=pd:2379
+      - --data-dir=/data/tikv
+      - --log-file=/data/tikv.log
+    ports:
+      - 20160:20160
+      - 20180:20180
+    volumes:
+      # TiKV 数据（业务数据实际存放位置）
+      - /data/tidb/tikv:/data
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - pd
+  tidb:
+    image: pingcap/tidb:v8.5.8
+    container_name: tidb
+    restart: always
+    command:
+      - --store=tikv
+      - --path=pd:2379
+      - --advertise-address=tidb
+      - --log-file=/data/tidb.log
+    ports:
+      - 4000:4000
+      - 10080:10080
+    volumes:
+      # 日志目录
+      - /data/tidb/tidb:/data
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - pd
+      - tikv
+  # 用 .env 中的密码设置 TiDB root 账号（幂等，执行完自动退出属正常现象）
+  tidb-init:
+    image: mysql:8.4.11
+    container_name: tidb-init
+    restart: "no"
+    depends_on:
+      - tidb
+    environment:
+      - TIDB_HOST=tidb
+      - TIDB_PORT=4000
+      - TIDB_ROOT_USER=${TIDB_ROOT_USER:-root}
+      - TIDB_ROOT_PASSWORD=${TIDB_ROOT_PASSWORD:?请在 tidb/.env 中配置 TIDB_ROOT_PASSWORD}
+    volumes:
+      - ./init/set-root-password.sh:/init/set-root-password.sh:ro
+    command: ["sh", "/init/set-root-password.sh"]
