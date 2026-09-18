@@ -1,23 +1,41 @@
-version: '3'
+# Kafka（ZooKeeper 模式；对外通告地址用同目录 .env 里的 HOST_IP）
+#
+# 使用到的端口（宿主机映射 1:1）：
+#   9092  Kafka broker，客户端连接的端口
+#   2182  ZooKeeper，宿主机侧用 2182（避开其它服务常用的 2181，容器内仍是 2181）
+#
+# 注意：HOST_IP 必须是宿主机局域网 IP（不能是 127.0.0.1）。
+#   KAFKA_ADVERTISED_LISTENERS 是 broker 告诉客户端「你接下来连我这个地址」，
+#   填错会出现「能连上 broker，但生产/消费时报 Connection to node 0 could not be established」。
+#   探测本机 IP：../redis-cluster/set-host-ip.sh --print   →   写入本目录 .env 的 HOST_IP
+#
+# 数据目录：/data/kafka、/data/zookeeper
 services:
   zookeeper:
     image: zookeeper:latest
-    volumes:
-      - /data/zookeeper:/data
+    container_name: kafka-zookeeper
+    restart: always
     ports:
       - 2182:2181
-       
+    volumes:
+      - /data/zookeeper:/data
+      - /etc/localtime:/etc/localtime:ro
+
   kafka9094:
     image: kafka:latest
+    container_name: kafka
+    restart: always
     ports:
       - 9092:9092
     environment:
       KAFKA_BROKER_ID: 0
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://192.168.1.60:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${HOST_IP:?请在 kafka/.env 中配置 HOST_IP（宿主机局域网 IP，如同目录 .env 示例 192.168.0.200）}:9092
       KAFKA_CREATE_TOPICS: "kafeidou:2:0"   #kafka启动后初始化一个有2个partition(分区)0个副本名叫kafeidou的topic 
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      TZ: Asia/Shanghai
     volumes:
       - /data/kafka:/kafka
+      - /etc/localtime:/etc/localtime:ro
     depends_on:
       - zookeeper

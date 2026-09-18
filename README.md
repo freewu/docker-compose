@@ -44,8 +44,9 @@ sudo chmod +x /usr/local/bin/docker-compose
     
 ```
 
-> 注意：`redis-sentinel`、`redis-cluster` 需要 `HOST_IP`（宿主机局域网 IP），不能是 `127.0.0.1`。
+> 注意：`redis-sentinel`、`redis-cluster`、`kafka` 需要 `HOST_IP`（宿主机局域网 IP），不能是 `127.0.0.1`。
 > `redis-cluster` 已提供脚本自动探测并写入 `.env`：`cd redis-cluster && ./set-host-ip.sh`
+> `kafka` 的 IP 写在 `kafka/.env`，探测：`redis-cluster/set-host-ip.sh --print`
 > `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.0.200 && docker compose up -d`（换成你自己的局域网 IP）
 >
 > 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
@@ -67,7 +68,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 | MongoDB        | mongo            | 27017                                    | 文档数据库                               |
 | Minio          | minio            | 9003,9004                                | 分布式文件存储系统                        |
 | Milvus         | milvus           | 19530,9091                               | 向量数据库                               |
-| Kafka          | kafka            | 9092                                     | 消息队列                                |
+| Kafka          | kafka            | 9092,2182                                | 消息队列（`KAFKA_ADVERTISED_LISTENERS` 需同目录 .env 的 `HOST_IP`）|
 | InfluxDB       | influxdb         | 8086,8083                                | 时序数据库                              |
 | Etcd           | etcd             | -                                        | 分布式 Key-Value 存储                   |
 | ElasticSearch  | elastic-search   | 9200,9800                                | 全文搜索数据库                           |
