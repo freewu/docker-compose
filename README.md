@@ -81,6 +81,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 | DolphinScheduler | DolphinScheduler | 12345,25333,5433                       | 分布式工作流任务调度（admin 密码由 .env 提供，默认 123456）|
 | Nacos          | nacos            | 8080,8848,9848                           | 服务注册与配置中心（控制台端口 8080，账号 nacos，密码由 .env 提供，默认 123456）|
 | Consul         | consul           | 8500,8600                                | 服务注册与配置中心（单节点 server，Web UI 8500 + DNS 8600，默认不开 ACL）|
+| RustFS         | rustfs           | 9020,9021                                | 对象存储（S3 兼容，控制台 9021 路径前缀 /rustfs/console/，账号密码由 .env 提供，默认 rustfs/123456）|
 
 ## docker hub 镜像
 ```bash

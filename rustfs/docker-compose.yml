@@ -1,0 +1,68 @@
+# RustFS 单节点对象存储（S3 兼容，Rust 实现）
+#
+# 使用到的端口（宿主机映射；故意避开本仓库已占用的 9000(clickhouse) / 9001(portainer) / 9003,9004(minio)）：
+#   9020  S3 API      -> 容器内 9000    http://localhost:9020
+#   9021  Web 控制台  -> 容器内 9001    http://localhost:9021/rustfs/console/
+#
+# 容器内还会监听但不映射到宿主机（因此不会和其他服务冲突）：
+#   9000  S3 API（RUSTFS_ADDRESS）      9001  控制台（RUSTFS_CONSOLE_ADDRESS）
+#
+# 数据目录：/data/rustfs/data     日志目录：/data/rustfs/logs
+#
+# 注意：镜像内默认用户是 rustfs(uid/gid 10001)，宿主机目录属主不对会启动失败
+# （日志报 Local disk initialization failed ... Permission denied）。
+# 所以下面先用 rustfs-perm 容器把数据/日志目录 chown 成 10001:10001（执行完即退出，属正常现象）。
+services:
+  # 一次性修正宿主机数据/日志目录属主（对应官方 compose 里的 volume-permission-helper）
+  rustfs-perm:
+    image: rustfs/rustfs:${RUSTFS_VERSION:-1.0.0}
+    container_name: rustfs-perm
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown -R 10001:10001 /data /logs && echo 'rustfs 数据/日志目录属主已修正为 10001:10001'"]
+    volumes:
+      # 目录不存在时 docker 会自动创建（属主 root），再交给上面的 chown 修正
+      - /data/rustfs/data:/data
+      - /data/rustfs/logs:/logs
+    restart: "no"
+
+  rustfs:
+    image: rustfs/rustfs:${RUSTFS_VERSION:-1.0.0}
+    container_name: rustfs
+    restart: always
+    depends_on:
+      rustfs-perm:
+        condition: service_completed_successfully
+    security_opt:
+      - "no-new-privileges:true"
+    environment:
+      - TZ=Asia/Shanghai
+      # 数据目录：单卷模式（多卷/集群写法见 Readme“配置说明”）
+      - RUSTFS_VOLUMES=/data
+      # 监听地址：容器内保持默认 9000/9001，宿主机端口在下面 ports 里换
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_CONSOLE_ENABLE=${RUSTFS_CONSOLE_ENABLE:-true}
+      # S3 账号密码（必填，见同目录 .env；RustFS 内置默认是 rustfsadmin/rustfsadmin）
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?请在 rustfs/.env 中配置 RUSTFS_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?请在 rustfs/.env 中配置 RUSTFS_SECRET_KEY}
+      # 日志：写到本地目录时该目录必须可写（镜像默认就是 /logs），级别 trace/debug/info/warn/error
+      - RUSTFS_OBS_LOG_DIRECTORY=/logs
+      - RUSTFS_OBS_LOGGER_LEVEL=${RUSTFS_OBS_LOGGER_LEVEL:-info}
+      # 想让 AWS SDK / Terraform 这类默认走 virtual-hosted-style 的客户端能用，取消下面这行注释并改成自己的域名
+      # - RUSTFS_SERVER_DOMAINS=s3.example.com
+    ports:
+      - 9020:9000
+      - 9021:9001
+    volumes:
+      - /data/rustfs/data:/data
+      - /data/rustfs/logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      # 健康检查在 S3 端口；控制台的健康检查在 /rustfs/console/health
+      # 若开了 RUSTFS_TLS_PATH（HTTPS），这里要改成 https:// 并加 -k 或证书参数
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health && curl -fsS http://127.0.0.1:9001/rustfs/console/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
