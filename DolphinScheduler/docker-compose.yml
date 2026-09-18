@@ -1,0 +1,140 @@
+# DolphinScheduler 单机版（standalone-server + 独立 PostgreSQL 元数据库）
+#
+# 组件与端口（宿主机映射 1:1）
+#
+#     | 端口  | 组件            | 用途                                 |
+#     |-------|----------------|--------------------------------------|
+#     | 12345 | ds-standalone  | Web UI + REST API                     |
+#     | 25333 | ds-standalone  | Python 网关（PyDolphinScheduler 用）    |
+#     | 5433  | ds-postgres    | 元数据库 PostgreSQL（容器内还是 5432）  |
+#
+#     只在容器内使用、不映射到宿主机：
+#       ds-standalone：master RPC 5678、worker RPC 1234、alert RPC 50052、内嵌 ZooKeeper 2181
+#       ds-postgres  ：5432
+#
+# 数据目录（宿主机绝对路径，删除即相当于重建）
+#
+#     /data/dolphinscheduler/postgresql   元数据（用户、租户、工作流定义与实例、数据源等）
+#     /data/dolphinscheduler/logs         各组件日志
+#     /data/dolphinscheduler/worker       任务运行临时目录
+#     /data/dolphinscheduler/resource     本地资源中心的文件
+#     /data/dolphinscheduler/soft         任务共享目录（/opt/soft）
+#
+# 启动顺序：ds-postgres（健康检查通过）→ ds-schema-init（建表，跑完退出）
+#           → ds-admin-init（改管理员密码，跑完退出）→ ds-standalone
+# 首次启动约 1~2 分钟（JVM 较慢），UI：http://localhost:12345/dolphinscheduler/ui
+
+services:
+  # 元数据库（DolphinScheduler 专用，和仓库里的 postgre 服务互不影响）
+  ds-postgres:
+    image: postgres:16-alpine
+    container_name: dolphinscheduler-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: "${DS_DB_USER:-dolphinscheduler}"
+      POSTGRES_PASSWORD: "${DS_DB_PASSWORD:?请在 DolphinScheduler/.env 中配置 DS_DB_PASSWORD}"
+      POSTGRES_DB: "${DS_DB_NAME:-dolphinscheduler}"
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: Asia/Shanghai
+    ports:
+      - "5433:5432"
+    volumes:
+      - /data/dolphinscheduler/postgresql:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DS_DB_USER:-dolphinscheduler} -d ${DS_DB_NAME:-dolphinscheduler}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - dolphinscheduler
+
+  # 建表 / 升级表结构（一次性容器，执行完退出属正常现象）
+  ds-schema-init:
+    image: "apache/dolphinscheduler-tools:${DS_VERSION:-3.4.3}"
+    container_name: dolphinscheduler-schema-init
+    restart: "no"
+    environment:
+      DATABASE: postgresql
+      SPRING_JACKSON_TIME_ZONE: UTC
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://ds-postgres:5432/${DS_DB_NAME:-dolphinscheduler}"
+      SPRING_DATASOURCE_USERNAME: "${DS_DB_USER:-dolphinscheduler}"
+      SPRING_DATASOURCE_PASSWORD: "${DS_DB_PASSWORD:?请在 DolphinScheduler/.env 中配置 DS_DB_PASSWORD}"
+      TZ: Asia/Shanghai
+    command: [ "tools/bin/upgrade-schema.sh" ]
+    depends_on:
+      ds-postgres:
+        condition: service_healthy
+    volumes:
+      - /data/dolphinscheduler/logs:/opt/dolphinscheduler/logs
+      - /data/dolphinscheduler/soft:/opt/soft
+      - /data/dolphinscheduler/resource:/dolphinscheduler
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - dolphinscheduler
+
+  # 设置内置管理员账号密码（一次性容器，执行完退出属正常现象）
+  ds-admin-init:
+    image: postgres:16-alpine
+    container_name: dolphinscheduler-admin-init
+    restart: "no"
+    environment:
+      DS_DB_HOST: ds-postgres
+      DS_DB_PORT: "5432"
+      DS_DB_NAME: "${DS_DB_NAME:-dolphinscheduler}"
+      DS_DB_USER: "${DS_DB_USER:-dolphinscheduler}"
+      DS_DB_PASSWORD: "${DS_DB_PASSWORD:?请在 DolphinScheduler/.env 中配置 DS_DB_PASSWORD}"
+      DS_ADMIN_USER: "${DS_ADMIN_USER:-admin}"
+      DS_ADMIN_PASSWORD: "${DS_ADMIN_PASSWORD:?请在 DolphinScheduler/.env 中配置 DS_ADMIN_PASSWORD}"
+      TZ: Asia/Shanghai
+    volumes:
+      - ./init/set-admin-password.sh:/init/set-admin-password.sh:ro
+      - /etc/localtime:/etc/localtime:ro
+    command: [ "sh", "/init/set-admin-password.sh" ]
+    depends_on:
+      ds-schema-init:
+        condition: service_completed_successfully
+    networks:
+      - dolphinscheduler
+
+  # DolphinScheduler 本体（standalone：master + worker + api + alert 都在这个容器里）
+  ds-standalone:
+    image: "apache/dolphinscheduler-standalone-server:${DS_VERSION:-3.4.3}"
+    container_name: dolphinscheduler
+    restart: always
+    environment:
+      # 用外部 PostgreSQL 做元数据库（不设置的话默认用内存 H2，重启数据就没了）
+      DATABASE: postgresql
+      SPRING_PROFILES_ACTIVE: postgresql
+      SPRING_JACKSON_TIME_ZONE: UTC
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://ds-postgres:5432/${DS_DB_NAME:-dolphinscheduler}"
+      SPRING_DATASOURCE_USERNAME: "${DS_DB_USER:-dolphinscheduler}"
+      SPRING_DATASOURCE_PASSWORD: "${DS_DB_PASSWORD:?请在 DolphinScheduler/.env 中配置 DS_DB_PASSWORD}"
+      TZ: Asia/Shanghai
+    ports:
+      - "12345:12345"
+      - "25333:25333"
+    volumes:
+      - /data/dolphinscheduler/logs:/opt/dolphinscheduler/logs
+      - /data/dolphinscheduler/worker:/tmp/dolphinscheduler
+      - /data/dolphinscheduler/resource:/dolphinscheduler
+      - /data/dolphinscheduler/soft:/opt/soft
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/12345" ]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+    depends_on:
+      ds-postgres:
+        condition: service_healthy
+      ds-admin-init:
+        condition: service_completed_successfully
+    networks:
+      - dolphinscheduler
+
+networks:
+  dolphinscheduler:
+    name: dolphinscheduler-net
+    driver: bridge

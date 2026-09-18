@@ -46,10 +46,10 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 > 注意：`redis-sentinel`、`redis-cluster` 需要 `HOST_IP`（宿主机局域网 IP），不能是 `127.0.0.1`。
 > `redis-cluster` 已提供脚本自动探测并写入 `.env`：`cd redis-cluster && ./set-host-ip.sh`
-> `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.1.4 && docker compose up -d`
+> `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.0.200 && docker compose up -d`（换成你自己的局域网 IP）
 >
 > 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
-> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）。
+> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）。
 
 ## 支持服务
 
@@ -77,6 +77,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 | Doris          | doris            | 8031,8032,8033,9031,9032,9033,8041,8042,8043 | OLAP 数据库（root 密码由 .env 提供，默认 123456）|
 | MariaDB        | mariadb          | 3307                                     | 关系型数据库                             |
 | TiDB           | tidb             | 4000,10080,2379,2380,20160,20180         | NewSQL 数据库 MySQL 协议（root 密码由 .env 提供，默认 123456）|
+| DolphinScheduler | DolphinScheduler | 12345,25333,5433                       | 分布式工作流任务调度（admin 密码由 .env 提供，默认 123456）|
 
 ## docker hub 镜像
 ```bash
