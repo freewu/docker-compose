@@ -1,0 +1,91 @@
+# Nacos 单机版（standalone + 内嵌 Derby 存储，不依赖外部数据库；账号密码见同目录 .env）
+#
+# 使用到的端口（宿主机映射 1:1）：
+#   8080  控制台（Nacos 3.x UI 独立端口）                  浏览器访问 http://localhost:8080/
+#   8848  服务端 HTTP API / OpenAPI / 登录接口（contextPath=/nacos）
+#         登录：http://localhost:8848/nacos/v3/auth/user/login
+#   9848  gRPC 端口，SDK 客户端连接用（= 8848 + 1000）
+#
+# 只在容器内监听、不需要映射到宿主机的端口：
+#   9849  集群内部 gRPC（= 8848 + 1001，单机模式用不到）
+#   7848  Raft 端口（= 8848 - 1000，集群选举用，单机模式用不到）
+#
+# 数据目录（宿主机）：
+#   /data/nacos/data   内嵌 Derby 数据库（配置、服务列表、用户等全部数据）
+#   /data/nacos/logs   日志（nacos.log、naming-server.log、access_log 等）
+#
+# 版本由 .env 的 NACOS_VERSION 控制，升级时改一处即可（控制台/服务端是同一个镜像）
+services:
+  nacos:
+    image: nacos/nacos-server:${NACOS_VERSION:-v3.2.4}
+    container_name: nacos
+    restart: always
+    environment:
+      # 单机模式 + 内嵌 Derby 存储（Nacos 会自动建表，无需初始化 SQL）
+      - MODE=standalone
+      # 实例地址用容器主机名而不是容器 IP（单机/集群都更稳）
+      - PREFER_HOST_MODE=hostname
+      # 可选：让 Nacos 把自己的地址通告成宿主机 IP（此时宿主机上的应用通过映射端口即可连上 8848/9848）
+      # 填了 NACOS_SERVER_IP 时优先级高于 PREFER_HOST_MODE，留空表示不设置
+      - NACOS_SERVER_IP=${NACOS_SERVER_IP:-}
+      # 鉴权：NACOS_AUTH_ENABLE 控制 Client API 是否需要 accessToken（3.x 建议开启）
+      # 想让应用不用带 token 直接调用，改成 false 后重建容器即可
+      - NACOS_AUTH_ENABLE=${NACOS_AUTH_ENABLE:-true}
+      - NACOS_AUTH_ADMIN_ENABLE=${NACOS_AUTH_ADMIN_ENABLE:-true}
+      - NACOS_AUTH_CONSOLE_ENABLE=${NACOS_AUTH_CONSOLE_ENABLE:-true}
+      # 服务端身份标识（服务间/集群调用校验用，必填，可随意改成自己的随机串）
+      - NACOS_AUTH_IDENTITY_KEY=${NACOS_AUTH_IDENTITY_KEY:?请在 nacos/.env 中配置 NACOS_AUTH_IDENTITY_KEY}
+      - NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE:?请在 nacos/.env 中配置 NACOS_AUTH_IDENTITY_VALUE}
+      # JWT 签名密钥（必须是 Base64 字符串，解码后至少 32 字节）
+      - NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN:?请在 nacos/.env 中配置 NACOS_AUTH_TOKEN}
+      # JVM 内存（镜像默认 1g/1g/512m，机器内存紧张时可调小，如 512m/512m/256m）
+      - JVM_XMS=${NACOS_JVM_XMS:-1g}
+      - JVM_XMX=${NACOS_JVM_XMX:-1g}
+      - JVM_XMN=${NACOS_JVM_XMN:-512m}
+      - TZ=Asia/Shanghai
+    ports:
+      - 8080:8080
+      - 8848:8848
+      - 9848:9848
+    volumes:
+      # Derby 数据（配置、服务列表、用户都存这里，删掉等于恢复出厂）
+      - /data/nacos/data:/home/nacos/data
+      # 日志
+      - /data/nacos/logs:/home/nacos/logs
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      # 控制台就绪探针（未鉴权接口，就绪前返回 500）
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/v3/console/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks:
+      - nacos
+
+  # 用 .env 中的密码初始化控制台管理员账号（幂等，执行完自动退出属正常现象）
+  nacos-init:
+    image: nacos/nacos-server:${NACOS_VERSION:-v3.2.4}
+    container_name: nacos-init
+    restart: "no"
+    # 覆盖镜像入口脚本，只跑初始化逻辑（镜像内自带 curl，可直接调接口）
+    entrypoint: ["sh", "/init/set-admin-password.sh"]
+    environment:
+      # 服务端 API 入口（带 contextPath=/nacos）与控制台入口，脚本会两个都试
+      - NACOS_SERVER_URL=http://nacos:8848/nacos
+      - NACOS_CONSOLE_URL=http://nacos:8080
+      - NACOS_ADMIN_PASSWORD=${NACOS_ADMIN_PASSWORD:?请在 nacos/.env 中配置 NACOS_ADMIN_PASSWORD}
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./init/set-admin-password.sh:/init/set-admin-password.sh:ro
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      nacos:
+        condition: service_healthy
+    networks:
+      - nacos
+
+networks:
+  nacos:
+    name: nacos-net
+    driver: bridge
