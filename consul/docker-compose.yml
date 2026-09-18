@@ -1,0 +1,37 @@
+# Consul 单节点服务端（server 模式 + Web UI + DNS 接口，数据持久化到宿主机 /data/consul）
+#
+# 使用到的端口（宿主机 1:1 映射）：
+#   8500  HTTP API + Web UI      http://localhost:8500/ui
+#   8600  DNS 接口（TCP + UDP）  dig @127.0.0.1 -p 8600 xxx.service.consul
+#
+# 容器内监听、默认不映射（单机模式用不到，将来做多节点集群才需要）：
+#   8300  server RPC              8301  serf LAN gossip（TCP/UDP）   8302  serf WAN gossip（TCP/UDP）
+#   8501  HTTPS API（默认关闭）   8502  gRPC/xDS（默认关闭）       8503  gRPC-TLS（2.x 默认会监听）
+#
+# 数据目录：/data/consul/data
+services:
+  consul:
+    image: hashicorp/consul:2.0.4
+    container_name: consul
+    restart: always
+    # 镜像 entrypoint 会自动补上 -data-dir=/consul/data -config-dir=/consul/config，
+    # 所以这里只要给子命令 agent，配置全部写在 ./config/consul.hcl 里
+    command: ["agent"]
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - 8500:8500
+      # DNS 同时走 TCP 和 UDP，两条都要映射
+      - 8600:8600/tcp
+      - 8600:8600/udp
+    volumes:
+      - /data/consul/data:/consul/data
+      - ./config/consul.hcl:/consul/config/consul.hcl:ro
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      # 有 leader 时 /v1/status/leader 返回 "IP:8300"，没有 leader 时返回空字符串
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8500/v1/status/leader | grep -q ':'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
