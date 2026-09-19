@@ -1,0 +1,91 @@
+# RocketMQ 单机版：NameServer + Broker + Dashboard（Web 控制台）
+#
+# 使用到的端口（宿主机映射，故意避开本仓库其它服务）：
+#   9876   NameServer  客户端 / SDK 的 namesrvAddr 用 <宿主机IP>:9876
+#   10911  Broker      客户端收发消息的主端口（remoting）
+#   10909  Broker      VIP 通道（= 10911 - 2），官方 Java 客户端默认走这个端口
+#   10912  Broker      HA 主从同步端口（单机用不到，先映射着，以后加从节点不用改）
+#   8180   Dashboard   控制台（容器内 8080；宿主机 8080 已被 nacos 占用，所以换成 8180）
+#
+# 容器内监听但不映射到宿主机（因此不会和其他服务冲突）：
+#   8081   Broker 的 gRPC 代理端口（5.x 开启 enableProxy=true 才有），用 gRPC 客户端时才需要映射
+#
+# 数据目录（宿主机）：/data/rocketmq/namesrv/logs、/data/rocketmq/broker/{logs,store}
+#
+# 注意：brokerIP1 取同目录 .env 的 HOST_IP（宿主机局域网 IP，不能是 127.0.0.1）。
+#       config/broker.conf 是模板，里面写的是 @HOST_IP@，启动时用 sed 渲染成 /home/rocketmq/broker.conf。
+services:
+  namesrv:
+    image: apache/rocketmq:${ROCKETMQ_VERSION:-5.3.2}
+    container_name: rocketmq-namesrv
+    restart: always
+    # 以 root 运行：宿主机 /data 目录由 Docker 以 root 创建，若镜像默认用户是非 root 的 rocketmq(3000)，
+    # 日志目录会报 Permission denied。想改回非 root：把 /data/rocketmq 属主改成 3000:3000 再删掉这行。
+    user: "0:0"
+    ports:
+      - 9876:9876
+    environment:
+      - TZ=Asia/Shanghai
+      - JAVA_OPT_EXT=${NAMESRV_JAVA_OPT_EXT:--Xms512m -Xmx512m -Xmn256m}
+    volumes:
+      - /data/rocketmq/namesrv/logs:/home/rocketmq/logs
+      - /etc/localtime:/etc/localtime:ro
+    command: sh mqnamesrv
+    networks:
+      - rocketmq
+
+  broker:
+    image: apache/rocketmq:${ROCKETMQ_VERSION:-5.3.2}
+    container_name: rocketmq-broker
+    restart: always
+    user: "0:0"
+    depends_on:
+      - namesrv
+    ports:
+      - 10911:10911
+      - 10909:10909
+      - 10912:10912
+    environment:
+      - TZ=Asia/Shanghai
+      - JAVA_OPT_EXT=${BROKER_JAVA_OPT_EXT:--Xms1g -Xmx1g -Xmn512m}
+      # 只用来渲染配置模板里的 @HOST_IP@（compose 变量不填会直接报错，避免忘配 .env 时静默用错地址）
+      - HOST_IP=${HOST_IP:?请在 rocketmq/.env 中配置 HOST_IP（宿主机局域网 IP，如同目录 .env 示例 192.168.110.141）}
+    volumes:
+      - /data/rocketmq/broker/logs:/home/rocketmq/logs
+      - /data/rocketmq/broker/store:/home/rocketmq/store
+      # 配置模板（只读挂载）：渲染结果写到家目录，不动镜像自带的 conf 目录
+      - ./config/broker.conf:/home/rocketmq/conf-template/broker.conf:ro
+      - /etc/localtime:/etc/localtime:ro
+    # 官方镜像的工作目录就是 RocketMQ 家目录（sh mqbroker 可直接用）
+    # 先把模板里的 @HOST_IP@ 换成宿主机 IP，再按官方示例方式启动 broker
+    command:
+      - sh
+      - -c
+      - >-
+        sed "s/@HOST_IP@/$$HOST_IP/g" /home/rocketmq/conf-template/broker.conf > /home/rocketmq/broker.conf &&
+        exec sh mqbroker -n namesrv:9876 -c /home/rocketmq/broker.conf
+    networks:
+      - rocketmq
+
+  dashboard:
+    image: apacherocketmq/rocketmq-dashboard:${ROCKETMQ_DASHBOARD_VERSION:-2.0.0}
+    container_name: rocketmq-dashboard
+    restart: always
+    depends_on:
+      - namesrv
+    ports:
+      - 8180:8080
+    environment:
+      - TZ=Asia/Shanghai
+      # namesrv 地址走容器网络内的服务名（官方镜像文档里的用法就是这么传的）
+      # 控制台端口用容器内默认的 8080，宿主机侧映射成 8180（宿主机 8080 是 nacos）
+      - JAVA_OPTS=-Drocketmq.namesrv.addr=namesrv:9876
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - rocketmq
+
+networks:
+  rocketmq:
+    name: rocketmq-net
+    driver: bridge
