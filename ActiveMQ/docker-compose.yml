@@ -1,0 +1,40 @@
+# ActiveMQ Classic 单机版（OpenWire + AMQP + STOMP + MQTT + Web 控制台）
+#
+# 使用到的端口（宿主机映射；容器内保持 ActiveMQ 默认端口，只有两个和本仓库冲突的端口在宿主机侧改了名）：
+#   61616  OpenWire      Java/JMS 客户端（默认协议）      tcp://<宿主机IP>:61616
+#   8161   Web 控制台    http://localhost:8161/
+#   61613  STOMP         stomp://<宿主机IP>:61613
+#   61614  WebSocket     ws://<宿主机IP>:61614
+#   5673   AMQP    -> 容器内 5672（本仓库 rabbitmq 已占用 5672，所以宿主机侧换成 5673）
+#   11883  MQTT    -> 容器内 1883（本仓库 mosquitto / mqtt(emqx) 已占用 1883，所以宿主机侧换成 11883）
+#
+# 容器内不监听其它端口：默认 activemq.xml 里 managementContext 是 createConnector="false"（没有 JMX 端口）。
+#
+# 数据目录（宿主机）：/data/activemq/data —— KahaDB 消息数据 + activemq.log / audit.log
+#
+# 账号密码、镜像版本、JVM 内存都在同目录 .env 里改（见 Readme）。
+services:
+  activemq:
+    image: apache/activemq-classic:${ACTIVEMQ_VERSION:-6.1.6}
+    container_name: activemq
+    restart: always
+    ports:
+      - 61616:61616
+      - 8161:8161
+      - 61613:61613
+      - 61614:61614
+      # AMQP：宿主机 5673 -> 容器 5672（避开 rabbitmq 的 5672）
+      - 5673:5672
+      # MQTT：宿主机 11883 -> 容器 1883（避开 mosquitto / emqx 的 1883）
+      - 11883:1883
+    environment:
+      - TZ=Asia/Shanghai
+      # Web 控制台账号密码（镜像支持这两个环境变量，默认 admin/admin）
+      - ACTIVEMQ_ADMIN_LOGIN=${ACTIVEMQ_ADMIN_LOGIN:-admin}
+      - ACTIVEMQ_ADMIN_PASSWORD=${ACTIVEMQ_ADMIN_PASSWORD:-123456}
+      # JVM 内存
+      - ACTIVEMQ_OPTS_MEMORY=${ACTIVEMQ_OPTS_MEMORY:--Xms256m -Xmx1g}
+    volumes:
+      # KahaDB 消息数据与日志都在 data 目录下（挂到这个目录就等于持久化 + 日志也能在宿主机看）
+      - /data/activemq/data:/opt/apache-activemq/data
+      - /etc/localtime:/etc/localtime:ro

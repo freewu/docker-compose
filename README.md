@@ -50,7 +50,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 > `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.0.200 && docker compose up -d`（换成你自己的局域网 IP）
 >
 > 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
-> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）。
+> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）、`ActiveMQ/.env`（`ACTIVEMQ_ADMIN_PASSWORD`）。
 
 ## 支持服务
 
@@ -83,6 +83,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 | Consul         | consul           | 8500,8600                                | 服务注册与配置中心（单节点 server，Web UI 8500 + DNS 8600，默认不开 ACL）|
 | RustFS         | rustfs           | 9020,9021                                | 对象存储（S3 兼容，控制台 9021 路径前缀 /rustfs/console/，账号密码由 .env 提供，默认 rustfs/123456）|
 | RocketMQ       | rocketmq         | 9876,10911,10909,10912,8180              | 消息队列（NameServer 9876 + Broker 10911/10909/10912 + 控制台 8180；`brokerIP1` 取同目录 .env 的 `HOST_IP`）|
+| ActiveMQ       | ActiveMQ         | 61616,8161,61613,61614,5673,11883        | 消息队列（Classic 单机，OpenWire 61616 + 控制台 8161；AMQP 宿主机 5673、MQTT 宿主机 11883，避开 rabbitmq 5672 / mosquitto 1883）|
 
 ## docker hub 镜像
 ```bash
