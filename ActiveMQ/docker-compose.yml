@@ -8,7 +8,8 @@
 #   5673   AMQP    -> 容器内 5672（本仓库 rabbitmq 已占用 5672，所以宿主机侧换成 5673）
 #   11883  MQTT    -> 容器内 1883（本仓库 mosquitto / mqtt(emqx) 已占用 1883，所以宿主机侧换成 11883）
 #
-# 容器内不监听其它端口：默认 activemq.xml 里 managementContext 是 createConnector="false"（没有 JMX 端口）。
+# 容器内不监听其它端口：默认 activemq.xml 里 managementContext 是 createConnector="false"，
+# 所以镜像虽然 EXPOSE 1099，但实际不会监听它（要用 JMX 得设 ACTIVEMQ_JMX_USER，见 Readme 常见问题 12）。
 #
 # 数据目录（宿主机）：/data/activemq/data —— KahaDB 消息数据 + activemq.log / audit.log
 #
@@ -29,11 +30,12 @@ services:
       - 11883:1883
     environment:
       - TZ=Asia/Shanghai
-      # Web 控制台账号密码（镜像支持这两个环境变量，默认 admin/admin）
-      - ACTIVEMQ_ADMIN_LOGIN=${ACTIVEMQ_ADMIN_LOGIN:-admin}
-      - ACTIVEMQ_ADMIN_PASSWORD=${ACTIVEMQ_ADMIN_PASSWORD:-123456}
-      # JVM 内存
-      - ACTIVEMQ_OPTS_MEMORY=${ACTIVEMQ_OPTS_MEMORY:--Xms256m -Xmx1g}
+      # Web 控制台账号密码（镜像 entrypoint.sh 认这两个变量，默认 admin/admin）
+      - ACTIVEMQ_WEB_USER=${ACTIVEMQ_WEB_USER:-admin}
+      - ACTIVEMQ_WEB_PASSWORD=${ACTIVEMQ_WEB_PASSWORD:-123456}
+      # JVM 参数：必须整串覆盖 ACTIVEMQ_OPTS（镜像已设过它，只改 ACTIVEMQ_OPTS_MEMORY 不生效），
+      # 后面的 -D 不能删（jetty.host 决定控制台是否监听 0.0.0.0，login.config 决定控制台能否登录）
+      - ACTIVEMQ_OPTS=${ACTIVEMQ_OPTS:--Xms256m -Xmx1g -Djava.util.logging.config.file=logging.properties -Djava.security.auth.login.config=/opt/apache-activemq/conf/login.config -Djetty.host=0.0.0.0}
     volumes:
       # KahaDB 消息数据与日志都在 data 目录下（挂到这个目录就等于持久化 + 日志也能在宿主机看）
       - /data/activemq/data:/opt/apache-activemq/data

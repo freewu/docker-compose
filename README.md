@@ -50,7 +50,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 > `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.0.200 && docker compose up -d`（换成你自己的局域网 IP）
 >
 > 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
-> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）、`ActiveMQ/.env`（`ACTIVEMQ_ADMIN_PASSWORD`）。
+> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）、`ActiveMQ/.env`（`ACTIVEMQ_WEB_PASSWORD`）。
 
 ## 支持服务
 

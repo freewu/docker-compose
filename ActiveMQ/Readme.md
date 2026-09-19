@@ -7,7 +7,7 @@ Apache ActiveMQ **Classic** 单机版（消息队列），用于本地开发/调
 | 镜像 | `apache/activemq-classic`（版本见 `.env` 的 `ACTIVEMQ_VERSION`，默认 `6.1.6`；Java 8/11 的客户端可以换成 `5.18.x`） |
 | 容器名 | `activemq` |
 | 默认协议 | OpenWire（61616）+ AMQP + STOMP + MQTT + WebSocket |
-| Web 控制台 | <http://localhost:8161/>，账号见 `.env`（默认 `admin` / `123456`） |
+| Web 控制台 | <http://localhost:8161/>，账号见 `.env`（`ACTIVEMQ_WEB_USER` / `ACTIVEMQ_WEB_PASSWORD`，镜像默认 `admin` / `admin`） |
 | 数据目录 | `/data/activemq/data`（KahaDB 消息数据 + `activemq.log`、`audit.log`） |
 | 目录结构 | 只有 `.env` + `docker-compose.yml` + `Readme.md`，不需要额外配置文件（全部用镜像默认配置 + 环境变量） |
 
@@ -33,8 +33,10 @@ Apache ActiveMQ **Classic** 单机版（消息队列），用于本地开发/调
 - `5673`、`11883` 是为了避开 `rabbitmq`（5672）和 `mosquitto`/`mqtt`（1883）**特意换的宿主机端口**；
   容器内依然是 5672 / 1883，所以 ActiveMQ 自身配置不用改，只要客户端连的时候用 5673 / 11883。
 
-容器内不监听额外端口：默认 `activemq.xml` 的 `managementContext createConnector="false"`，所以没有 JMX 端口；
-`8161` 就是控制台本身（不像 RocketMQ 那样还分 NameServer/Broker 多个端口）。
+容器内不监听额外端口：默认 `activemq.xml` 的 `managementContext createConnector="false"`，所以基本**没有** JMX 端口
+（镜像虽然 `EXPOSE 1099`，但默认配置不会去监听它）；`8161` 就是控制台本身（不像 RocketMQ 那样还分 NameServer/Broker 多个端口）。
+要用 JMX 就设 `ACTIVEMQ_JMX_USER` / `ACTIVEMQ_JMX_PASSWORD`（镜像 entrypoint 会自动打开 `createConnector`），
+那时再把 `1099:1099` 加进 `ports`，见常见问题 12。
 
 ## 启动
 
@@ -121,9 +123,18 @@ spring.activemq.broker-url=tcp://192.168.110.141:61616
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `ACTIVEMQ_VERSION` | `6.1.6` | 镜像 tag（`apache/activemq-classic`；老客户端可用 `5.18.7`） |
-| `ACTIVEMQ_ADMIN_LOGIN` | `admin` | Web 控制台用户名 |
-| `ACTIVEMQ_ADMIN_PASSWORD` | `123456` | Web 控制台密码 |
-| `ACTIVEMQ_OPTS_MEMORY` | `-Xms256m -Xmx1g` | JVM 内存，内存紧张的机器可以调小 |
+| `ACTIVEMQ_WEB_USER` | `admin` | Web 控制台用户名（**不是** `ACTIVEMQ_ADMIN_LOGIN`，那个这镜像不认） |
+| `ACTIVEMQ_WEB_PASSWORD` | `123456` | Web 控制台密码 |
+| `ACTIVEMQ_OPTS` | `-Xms256m -Xmx1g -Djava.util.logging.config.file=logging.properties -Djava.security.auth.login.config=/opt/apache-activemq/conf/login.config -Djetty.host=0.0.0.0` | JVM 参数（内存在这里改；后面的 `-D` 不能删，原因见常见问题 6） |
+
+这几个变量是**镜像的 `entrypoint.sh` 认的**（不是 ActiveMQ 自身的配置项）：在 `.env` 里加上就会生效，
+原理是 entrypoint 在启动前改镜像内的配置文件：
+
+| 变量 | 作用（entrypoint 会去改哪个文件） | 默认值 |
+|------|----------------------------------|--------|
+| `ACTIVEMQ_WEB_USER` / `ACTIVEMQ_WEB_PASSWORD` | 控制台账号（`conf/users.properties`） | `admin` / `admin` |
+| `ACTIVEMQ_CONNECTION_USER` / `ACTIVEMQ_CONNECTION_PASSWORD` | 打开 broker 连接鉴权（`conf/credentials.properties` + 往 `activemq.xml` 插入 `simpleAuthenticationPlugin`） | 关闭（`system` / `manager`） |
+| `ACTIVEMQ_JMX_USER` / `ACTIVEMQ_JMX_PASSWORD` | 打开 JMX 连接器（`createConnector="true"`，端口 1099） | 关闭（`admin` / `activemq`） |
 
 不做外部配置的部分（都用镜像默认值，改起来要挂配置文件）：
 
@@ -136,28 +147,31 @@ spring.activemq.broker-url=tcp://192.168.110.141:61616
 
 1. **控制台登录不上 / 账号密码不是 `.env` 里的**
 
-   控制台账号来自镜像内的 `conf/jetty-realm.properties`。`.env` 里的 `ACTIVEMQ_ADMIN_LOGIN/PASSWORD` 是官方镜像的
-   环境变量，可用下面命令确认是否生效：
+   6.x 的控制台**不用** `jetty-realm.properties`（那是 5.x / 社区镜像的写法，6.1.6 镜像里根本没这个文件），
+   而是走 JAAS：`conf/login.config` 指定 `PropertiesLoginModule` 去读 `conf/users.properties`（用户）和
+   `conf/groups.properties`（角色），镜像默认内容就是 `admin=admin` + `admins=admin`。
+
+   改账号密码用镜像 entrypoint 认的两个环境变量：`.env` 里的 `ACTIVEMQ_WEB_USER` / `ACTIVEMQ_WEB_PASSWORD`，
+   改完 `docker compose up -d --force-recreate`。确认是否生效：
 
    ```bash
-   docker exec -it activemq cat /opt/apache-activemq/conf/jetty-realm.properties
+   docker exec -it activemq cat /opt/apache-activemq/conf/users.properties    # 应为 admin=123456
+   docker exec -it activemq cat /opt/apache-activemq/conf/groups.properties
    ```
 
-   如果文件里还是 `admin: admin, admin`，说明这个镜像版本不认那两个环境变量，直接改文件（改完重启，重建容器会丢）：
+   两个注意点：
 
-   ```bash
-   docker exec -it activemq sed -i 's/^admin:.*/admin: 123456, admin/' /opt/apache-activemq/conf/jetty-realm.properties
-   docker restart activemq
-   ```
+   - **用户名建议保持 `admin`**：`groups.properties` 里是 `admins=admin`，改了用户名还得同步改这个文件（entrypoint 不管它）；
+   - 想持久化/完全自定义，就把两个文件拷出来挂进去（`.env` 里对应变量注释掉，避免两处配置打架）：
 
-   想持久化就把改好的文件拷出来挂进去（同时把 `.env` 里的 `ACTIVEMQ_ADMIN_*` 注释掉，避免两处配置打架）：
-
-   ```bash
-   docker cp activemq:/opt/apache-activemq/conf/jetty-realm.properties ./config/jetty-realm.properties
-   # docker-compose.yml 的 volumes 里加：
-   #   - ./config/jetty-realm.properties:/opt/apache-activemq/conf/jetty-realm.properties:ro
-   docker compose up -d --force-recreate
-   ```
+     ```bash
+     docker cp activemq:/opt/apache-activemq/conf/users.properties  ./config/users.properties
+     docker cp activemq:/opt/apache-activemq/conf/groups.properties ./config/groups.properties
+     # docker-compose.yml 的 volumes 里加：
+     #   - ./config/users.properties:/opt/apache-activemq/conf/users.properties:ro
+     #   - ./config/groups.properties:/opt/apache-activemq/conf/groups.properties:ro
+     docker compose up -d --force-recreate
+     ```
 
 2. **控制台打不开（8161）**
 
@@ -186,7 +200,8 @@ spring.activemq.broker-url=tcp://192.168.110.141:61616
 
 5. **数据没落到 `/data/activemq/data`（挂载路径不对）**
 
-   不同镜像版本的家目录可能不是 `/opt/apache-activemq`（软链）而是带版本号的目录。自查：
+   6.1.6 镜像里 `ACTIVEMQ_HOME=/opt/apache-activemq`（镜像里同时有 `/opt/apache-activemq-6.1.6`，不要挂错），
+   正常不会出问题；换了版本后如果发现数据没落袋，按下面命令自查真实路径：
 
    ```bash
    docker exec -it activemq ls -l /opt
@@ -196,10 +211,22 @@ spring.activemq.broker-url=tcp://192.168.110.141:61616
    如果实际路径不是 `/opt/apache-activemq/data`（例如 `/opt/apache-activemq-6.1.6/data`），
    把 `docker-compose.yml` 里的挂载改成实际路径后重建即可（日志同理，默认都在 `data` 目录下）。
 
-6. **容器内存不够 / 被系统 OOM kill**
+6. **容器内存不够 / 被系统 OOM kill（为什么改 `ACTIVEMQ_OPTS_MEMORY` 没用）**
 
-   把 `.env` 的 `ACTIVEMQ_OPTS_MEMORY` 调小（如 `-Xms128m -Xmx512m`）后重建；
-   KahaDB 有页缓存，`-Xmx` 也别设得太小，512m 以下不太推荐。
+   镜像的 Dockerfile 里已经把 `ACTIVEMQ_OPTS` 设成了一个完整字符串：
+   `-Xms64M -Xmx1G -Djava.util.logging.config.file=logging.properties -Djava.security.auth.login.config=... -Djetty.host=0.0.0.0`；
+   而 `bin/activemq` 只有在 `ACTIVEMQ_OPTS` **为空**时才会去读 `ACTIVEMQ_OPTS_MEMORY`。所以：
+
+   - 只改 `ACTIVEMQ_OPTS_MEMORY` → **完全不生效**（这是最容易踩的坑）；
+   - 要改内存只能整串覆盖 `ACTIVEMQ_OPTS`（本目录 `.env` 就是这么写的），且**必须保留后面的 `-D`**：
+     删掉 `-Djetty.host=0.0.0.0` → 控制台只监听容器内 127.0.0.1，宿主机 8161 打不开；
+     删掉 `-Djava.security.auth.login.config=...` → 控制台登录会异常。
+
+   内存紧张就把 `-Xmx` 调到 512m 左右（KahaDB 有页缓存，不建议低于 512m）：
+
+   ```
+   ACTIVEMQ_OPTS=-Xms128m -Xmx512m -Djava.util.logging.config.file=logging.properties -Djava.security.auth.login.config=/opt/apache-activemq/conf/login.config -Djetty.host=0.0.0.0
+   ```
 
 7. **61616 连不上**
 
@@ -210,10 +237,21 @@ spring.activemq.broker-url=tcp://192.168.110.141:61616
 
 8. **想给 broker 开鉴权（默认任何人都能连 61616）**
 
-   默认 `activemq.xml` 里 `<simpleAuthenticationPlugin>` 是注释状态。要开启：把镜像的 `conf/activemq.xml`
-   拷到宿主机（`docker cp activemq:/opt/apache-activemq/conf/activemq.xml ./config/`），
-   打开 `simpleAuthenticationPlugin` 并配上 users/groups，再按第 1 条的方式挂载进去重建。
-   注意：这属于**整文件覆盖**镜像自带的配置，升级镜像时要重新拷一份比对。
+   默认 `activemq.xml` 里 `<simpleAuthenticationPlugin>` 是注释状态，所以连 61616/61613/11883 都不校验账号。
+
+   不用手改配置——镜像 entrypoint 支持两个环境变量，在 `.env` 里加上、重建容器即可：
+
+   ```
+   ACTIVEMQ_CONNECTION_USER=admin
+   ACTIVEMQ_CONNECTION_PASSWORD=123456
+   ```
+
+   entrypoint 会把 `conf/credentials.properties` 里的 `system/manager` 换成你给的账号，并自动往 `activemq.xml`
+   插入 `simpleAuthenticationPlugin`。客户端连接时带上同样的账号密码即可（Java：`factory.createConnection(user, pass)`；
+   Spring Boot：`spring.activemq.user` / `spring.activemq.password`）。
+
+   想按队列/主题做更细的授权（`authorizationPlugin`）就得自己挂 `activemq.xml` + `users.properties`/`groups.properties`，
+   那属于**整文件覆盖**镜像自带配置，升级镜像时要重新拷一份比对。
 
 9. **想换 ActiveMQ 版本 / 从 5.x 升到 6.x**
 
@@ -234,3 +272,19 @@ spring.activemq.broker-url=tcp://192.168.110.141:61616
     镜像 tag 不存在（`.env` 的 `ACTIVEMQ_VERSION` 写错或太新/太旧）或拉不动 Docker Hub。
     去 Docker Hub 的 `apache/activemq-classic` 页面挑一个存在的 tag（也可以先用 `latest`），
     内网拉不动就换成自己的镜像仓库地址（`image:` 那一行）。
+
+12. **想看 JMX（1099 端口）**
+
+    默认不开（`managementContext createConnector="false"`）。要开就在 `.env` 里加：
+
+    ```
+    ACTIVEMQ_JMX_USER=admin
+    ACTIVEMQ_JMX_PASSWORD=activemq
+    ```
+
+    entrypoint 会把 `conf/jmx.access`、`conf/jmx.password`（默认 `admin` / `activemq`）换成你给的值并打开连接器；
+    再把 `1099:1099` 加进 `docker-compose.yml` 的 `ports`，重建容器后即可用 JConsole / VisualVM 连
+    `service:jmx:rmi:///jndi/rmi://<宿主机IP>:1099/jmxrmi`。
+
+    跨机器连时注意 RMI 会返回一个「容器自己的地址/端口」给客户端（和 RocketMQ 的 brokerIP1 是同一类问题），
+    如果 JConsole 报连接被拒，就在 `ACTIVEMQ_OPTS` 里补上 `-Djava.rmi.server.hostname=<宿主机IP>`。
