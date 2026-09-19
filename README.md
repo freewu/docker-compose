@@ -44,9 +44,9 @@ sudo chmod +x /usr/local/bin/docker-compose
     
 ```
 
-> 注意：`redis-sentinel`、`redis-cluster`、`kafka`、`rocketmq` 需要 `HOST_IP`（宿主机局域网 IP），不能是 `127.0.0.1`。
+> 注意：`redis-sentinel`、`redis-cluster`、`kafka`、`rocketmq`、`Pulsar` 需要 `HOST_IP`（宿主机局域网 IP），不能是 `127.0.0.1`。
 > `redis-cluster` 已提供脚本自动探测并写入 `.env`：`cd redis-cluster && ./set-host-ip.sh`
-> `kafka`、`rocketmq` 的 IP 写在各自的 `.env`（`kafka/.env`、`rocketmq/.env`），探测：`redis-cluster/set-host-ip.sh --print`
+> `kafka`、`rocketmq`、`Pulsar` 的 IP 写在各自的 `.env`（`kafka/.env`、`rocketmq/.env`、`Pulsar/.env`），探测：`redis-cluster/set-host-ip.sh --print`
 > `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.0.200 && docker compose up -d`（换成你自己的局域网 IP）
 >
 > 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
@@ -84,6 +84,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 | RustFS         | rustfs           | 9020,9021                                | 对象存储（S3 兼容，控制台 9021 路径前缀 /rustfs/console/，账号密码由 .env 提供，默认 rustfs/123456）|
 | RocketMQ       | rocketmq         | 9876,10911,10909,10912,8180              | 消息队列（NameServer 9876 + Broker 10911/10909/10912 + 控制台 8180；`brokerIP1` 取同目录 .env 的 `HOST_IP`）|
 | ActiveMQ       | ActiveMQ         | 61616,8161,61613,61614,5673,11883        | 消息队列（Classic 单机，OpenWire 61616 + 控制台 8161；AMQP 宿主机 5673、MQTT 宿主机 11883，避开 rabbitmq 5672 / mosquitto 1883）|
+| Pulsar         | Pulsar           | 6650,8085                                | 消息队列（standalone：客户端协议 6650 + Admin/WebSocket 8085（容器内 8080，避开 nacos）；broker 通告地址取同目录 .env 的 `HOST_IP`）|
 
 ## docker hub 镜像
 ```bash
