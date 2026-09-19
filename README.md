@@ -50,7 +50,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 > `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.0.200 && docker compose up -d`（换成你自己的局域网 IP）
 >
 > 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
-> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）、`ActiveMQ/.env`（`ACTIVEMQ_WEB_PASSWORD`）。
+> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）、`ActiveMQ/.env`（`ACTIVEMQ_WEB_PASSWORD`）、`postgre/.env`（`POSTGRES_PASSWORD` / `POSTGRES_VERSION`）。
 
 ## 支持服务
 
@@ -60,7 +60,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 | Redis-Sentinel | redis-sentinel   | 26379,26380,26381,5540,6379,6380,6381    | NoSql 数据库 Redis 哨兵模式（密码 123456）|
 | Redis-Cluster  | redis-cluster    | 7001,7002,7003,7004,7005,7006,17001,17002,17003,17004,17005,17006 | NoSql 数据库 Redis 集群模式 3主3从（密码 123456）|
 | MySQL          | mysql            | 3306                                     | RMDBS 关系型数据库                       |
-| PostgreSQL     | postgre          | 5432                                     | RMDBS 关系型数据库                       |
+| PostgreSQL     | postgre          | 5432                                     | RMDBS 关系型数据库（版本/账号密码由 .env 提供，默认 18.6 与 root/root；18+ 数据在 /data/postgresql/18/docker）|
 | RabbitMQ       | rabbitmq         | 15672,5672                               | 消息队列                                |
 | MQTT           | mqtt             | 18083,1883,8084,8883,8083                | 消息队列 (用于物联网)                     |
 | Portainer      | postainer        | 8001,9001                                | Docker 服务管理                         |

@@ -1,13 +1,38 @@
-version: '3'
+# PostgreSQL 单机版
+#
+# 端口（宿主机映射 1:1）：
+#   5432  PostgreSQL 标准端口；本仓库只有 postgre 用它
+#         （DolphinScheduler 的元数据库是另一个实例，占用宿主机 5433，注意别连错）
+#
+# 数据目录（宿主机）：/data/postgresql
+#   18+ 官方要求把整层 /var/lib/postgresql 挂出来，PGDATA 默认是 /var/lib/postgresql/<PG_MAJOR>/docker，
+#   所以数据实际落在 /data/postgresql/18/docker（18 是 PG 大版本号，升级大版本会新建目录，不会覆盖老数据）。
+#
+# 账号密码、镜像版本在同目录 .env（POSTGRES_* / POSTGRES_VERSION），改完 docker compose up -d --force-recreate
 services:
   postgres:
-    image: postgres
+    # 固定大版本，不要用 image: postgres（latest 已经到 18，数据布局和老版本不同）
+    image: postgres:${POSTGRES_VERSION:-18.6}
     container_name: postgres
     restart: always
+    # 容器默认 /dev/shm 只有 64MB，PG 并行查询会让容器内报 "could not resize shared memory segment"
+    shm_size: 256mb
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: root
+      POSTGRES_USER: "${POSTGRES_USER:-root}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-root}"
+      POSTGRES_DB: "${POSTGRES_DB:-root}"
+      TZ: Asia/Shanghai
+      # 故意不设 PGDATA：用镜像 18+ 的默认值 /var/lib/postgresql/18/docker
     ports:
-        - 5432:5432
+      - 5432:5432
     volumes:
-        - /data/postgresql:/var/lib/postgresql/data
+      # 18+ 必须是 /var/lib/postgresql 这一层；挂成 /var/lib/postgresql/data 会直接报错退出：
+      #   "in 18+, these Docker images are configured to store database data in a format ..."
+      - /data/postgresql:/var/lib/postgresql
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-root} -d ${POSTGRES_DB:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
