@@ -6,7 +6,7 @@ MongoDB 单机版（文档数据库 / NoSQL），用于本地开发调试。
 |------|------|
 | 镜像 | `mongo`（版本见 `.env` 的 `MONGO_VERSION`，默认 `8.0` LTS，即 8.0.32；当前 latest 是 8.3.11） |
 | 容器名 | `mongo` |
-| 启动方式 | `mongod --config /etc/mongo/mongod.conf`（配置文件里开了 `replSetName: rs0`，见「单节点副本集」） |
+| 启动方式 | `mongod --config /etc/mongo/mongod.conf --auth`（`--auth` 是镜像入口脚本根据 `.env` 里的 `MONGO_INITDB_ROOT_*` 自动加的）；默认**单机模式**，多文档事务需自己开副本集，见「单节点副本集」 |
 | 连接串 | `mongodb://root:123456@192.168.110.141:27017/?authSource=admin` |
 | 数据目录 | `/data/mongodb/data/db`（数据，容器内 `/data/db`） |
 | 日志目录 | `/data/mongodb/data/log`（容器内 `/var/log/mongodb`，日志文件 `mongod.log`） |
@@ -21,7 +21,8 @@ MongoDB 单机版（文档数据库 / NoSQL），用于本地开发调试。
 > | `root` | `123456` | `admin` | `root`（超级管理员） | 镜像按 `.env` 里的 `MONGO_INITDB_ROOT_*` 创建 |
 > | `test` | `123456` | `hi` | `readWrite`（只读写 `hi`） | `script/init.sh` |
 >
-> 配置文件里写了副本集名 `rs0`、但**必须手动 `rs.initiate()` 才真正生效**（不开也能用，只是不能用多文档事务），见下面「单节点副本集」。
+> 默认是**单机模式 + 鉴权**（standalone，够本地开发用）。要用**多文档事务**（Spring `@Transactional`、`session.startTransaction()`）
+> 就按下面「单节点副本集」开启 —— 注意「鉴权 + 副本集」必须同时配 `security.keyFile`，否则 mongod 直接启动失败（见常见问题 16）。
 
 > **内核 6.19 ~ 7.0.13 的机器注意**：官方镜像自带的 `GLIBC_TUNABLES=glibc.pthread.rseq=0` 在这段内核上会让
 > mongod 直接退出，日志是 `MongoDB cannot start: Linux kernel versions 6.19 and newer has a known incompatibility...`。
@@ -83,23 +84,54 @@ docker exec -it mongo mongosh -u root -p 123456 --authenticationDatabase admin \
 docker exec -it mongo mongosh -u root -p 123456 --authenticationDatabase admin
 ```
 
-## 单节点副本集（rs0）
+## 单节点副本集（可选，多文档事务才需要）
 
-`config/mongod.conf` 里开了：
+默认**不开**副本集（单机模式）。因为本目录开了鉴权（`.env` 里的 `MONGO_INITDB_ROOT_*` 会让镜像入口脚本
+给 mongod 自动追加 `--auth`），而 MongoDB 要求「**鉴权 + 副本集**」必须配内部认证（keyFile），否则直接启动失败
+（`BadValue: security.keyFile is required ...`，见常见问题 16）。要用多文档事务就按下面三步开。
+
+### 1. 生成 keyFile（放命名卷里）
+
+keyFile 的内容只要 6~1024 字节随机数据，但 **权限必须是 400/600**，否则 mongod 拒绝启动
+（`InvalidPath: permissions on ... are too open`）。所以放 Docker 命名卷（Linux 文件系统，权限改得动）；
+放宿主机目录后在 Windows / macOS 上权限往往改不动（始终 777），就会踩这个坑。
+
+```bash
+cd mongo
+docker volume create mongo-key >/dev/null
+docker run --rm -v mongo-key:/key alpine \
+  sh -c 'head -c 700 /dev/urandom | base64 > /key/keyfile && chmod 400 /key/keyfile && chown 999:999 /key/keyfile'
+docker run --rm -v mongo-key:/key alpine ls -l /key/keyfile     # 应是 -r-------- 999 999
+```
+
+### 2. 打开配置里注释掉的三处（都在本目录下）
 
 ```yaml
+# config/mongod.conf：取消注释这两段
 replication:
   oplogSizeMB: 51200
   replSetName: rs0
+security:
+  keyFile: /etc/mongo-key/keyfile
+
+# docker-compose.yml：services.mongo.volumes 里取消注释
+      - mongo-key:/etc/mongo-key
+# docker-compose.yml：文件末尾取消注释
+volumes:
+  mongo-key:
+    name: mongo-key        # 固定卷名，和上面 docker run 用的名字一致
 ```
 
-只是**声明**了副本集名，`mongod` 起来后副本集仍是「未初始化」状态：
+改完重建容器（配置和挂载变了，`restart` 不会重新读挂载）：
 
-- 普通增删改查、`mongosh`、大部分驱动都能正常用；
-- 但 `rs.status()` 会报 `NotYetInitialized: no replset config has been received`；
-- **多文档事务**（`session.startTransaction()`，Spring 的 `@Transactional`）必须副本集，不初始化就用不了。
+```bash
+docker compose up -d --force-recreate
+docker compose logs --tail=5 mongo        # 看到 "Waiting for connections" 就起来了
+```
 
-要用事务（或想让副本集真正就绪）就初始化一次，成员的 host **要写宿主机局域网 IP**，否则别的机器/容器连上来会拿到一个连不通的地址：
+### 3. 初始化副本集（只需一次）
+
+成员 host **要写宿主机局域网 IP**，写 `127.0.0.1` / 容器名的话，别的机器连上来会拿到一个连不通的地址：
 
 ```bash
 docker exec -it mongo mongosh -u root -p 123456 --authenticationDatabase admin --eval '
@@ -118,9 +150,9 @@ docker exec -it mongo mongosh -u root -p 123456 --authenticationDatabase admin -
 mongodb://root:123456@192.168.110.141:27017/?authSource=admin&replicaSet=rs0
 ```
 
-如果不想要副本集（单机够用、避开这些麻烦）：把 `config/mongod.conf` 里的 `replication:` 两行删掉，
-清空数据目录重启即可（常见问题 11）。注意：**删掉副本集配置后原来的数据只能用在新目录里**，
-换回来同理，别拿同一份数据目录来回切。
+> 要退回单机模式：把上面三处改回注释、`docker compose up -d --force-recreate` 即可。
+> 如果已经 `rs.initiate()` 过，建议清空数据目录重启（常见问题 11）——副本集初始化过的数据目录
+> （`local` 库里存了副本集配置）直接当单机起会报错，别拿同一份目录在「单机 / 副本集」之间来回切。
 
 ## `.env` 配置
 
@@ -215,11 +247,12 @@ cd mongo && docker compose up -d --force-recreate
    `up -d`、改脚本都不会再跑。想在已有数据上重跑初始化逻辑，只能清空数据目录（常见问题 11，注意先备份），
    或者手动把脚本内容贴进 mongosh 执行一遍。
 
-7. **`rs.status()` 报 `no replset config has been received`**
+7. **`rs.status()` 报 `no replset config has been received` / 用事务报 `Transaction numbers are only allowed on a replica set member or mongos`**
 
-   这是「声明了副本集名但没初始化」的正常状态，不影响普通读写；要用事务就按上面「单节点副本集」跑一次
-   `rs.initiate()`。如果客户端连接串带了 `replicaSet=rs0` 而没初始化过，驱动会一直找不到 primary，
-   报 `No primary detected for set rs0` / 超时。
+   默认配置是**单机模式**（`replication` 段是注释掉的），本来就没有副本集，所以 `rs` 相关命令不可用是正常的。
+   要用多文档事务（Spring `@Transactional`、`session.startTransaction()`）就按上面「单节点副本集」把副本集开起来
+   （注意必须同时配 `security.keyFile`，见常见问题 16）。如果连接串里带了 `replicaSet=rs0` 而实际没开副本集，
+   驱动会一直找不到 primary，报 `No primary detected for set rs0` / 超时。
 
 8. **数据目录权限 / 容器一直重启并报 Permission denied**
 
@@ -263,9 +296,10 @@ cd mongo && docker compose up -d --force-recreate
     `config/mongod.conf` 里写死了 `cacheSizeGB: 1`：WiredTiger 缓存上限 1GB（默认算法是「内存的一半减 1GB」，
     开发机不用给太大，但别小于 256MB）。如果容器频繁 OOM 或大量写被刷盘卡住，把它调大一点。
 
-    `oplogSizeMB: 51200` 是 oplog 体积**上限**（50GB）。WiredTiger 不会一上来就占满，是按需增长的，
-    但单节点小内存机器长期跑着写入多的话，这块会慢慢把磁盘吃掉；不需要这么大就改成 `1024` 之类。
-    注意：改这两个值都需要重启容器；改 `oplogSizeMB` 后如果副本集已初始化，还需要 `rs.reconfig` 才会生效。
+    `oplogSizeMB: 51200`（默认注释掉了，只在开副本集时生效）是 oplog 体积**上限**（50GB）。
+    WiredTiger 不会一上来就占满，是按需增长的，但单节点小内存机器长期跑着写入多的话，这块会慢慢把磁盘吃掉；
+    不需要这么大就改成 `1024` 之类。注意：改 `cacheSizeGB` 重启容器即可；`oplogSizeMB` 在副本集已经
+    `rs.initiate()` 过之后改文件不生效，要用 `replSetResizeOplog` 命令（5.0+）调整。
 
 11. **怎么彻底重置（清空数据重新初始化）**
 
@@ -389,6 +423,39 @@ cd mongo && docker compose up -d --force-recreate
     其它「老配置里常见、但现在已移除」的选项（8.0 实测报同一个错）：`net.http.enabled`（HTTP 接口 5.1 移除）、
     `storage.mmapv1.*`（4.2 起没有 mmapv1 引擎）、`storage.indexBuildRetry`（6.0 移除）。
     排查套路：报错信息会直接点名选项，把配置里那一行/那一段删掉或按新版文档改名即可。
+
+16. **启动报 `BadValue: security.keyFile is required when authorization is enabled with replica sets`**
+
+    ```text
+    BadValue: security.keyFile is required when authorization is enabled with replica sets
+    try 'mongod --help' for more information
+    ```
+
+    三个条件同时成立就会被拒（本目录默认配置已避开，所以默认不会报）：
+
+    1. `.env` 里设了 `MONGO_INITDB_ROOT_USERNAME/PASSWORD` → 镜像入口脚本会给 mongod 追加 `--auth`；
+    2. `config/mongod.conf` 里声明了 `replication.replSetName`（老版本仓库里这个默认是开着的）；
+    3. 没有配内部认证 `security.keyFile`。
+
+    MongoDB 的规则是：**副本集成员之间必须用 keyFile（或 x509）做内部认证**，所以「鉴权 + 副本集 + 无 keyFile」
+    直接判为非法配置。三个版本（7.0.43 / 8.0.32 / 8.3.11）实测是同一个报错。
+    另外注意这个报错发生在入口脚本初始化**之后**：日志前面可能已经看到建好 root 用户、跑过初始化脚本，
+    最后才因这个错退出，别误判成账号问题。
+
+    按需要三选一：
+
+    | 你想要的形态 | 做法 |
+    |--------------|------|
+    | 单机 + 鉴权（本地开发默认，最省事） | 保持 `config/mongod.conf` 里 `#replication:` 的注释状态，什么都不用加 |
+    | 副本集 + 鉴权（要用多文档事务） | 按上面「单节点副本集」生成 keyFile，并打开 `replication` + `security.keyFile` 两段 |
+    | 副本集 + 不要鉴权 | 删掉 `.env` 里 `MONGO_INITDB_ROOT_USERNAME/PASSWORD` 两行，入口脚本就不会加 `--auth`，副本集也就不需要 keyFile（代价：数据库裸奔，只适合临时调试） |
+
+    生效方式：只改了 `config/mongod.conf` → `docker compose restart mongo`；改了 `.env` 或 compose 文件 →
+    `docker compose up -d --force-recreate`。
+
+    keyFile 自身的两个坑（都实测过）：**权限必须 400/600**，否则报
+    `InvalidPath: permissions on /... are too open`；**内容 6~1024 字节**，太大报
+    `Security key size is out range ... maximumLength: 1024`（`head -c 700 /dev/urandom | base64` 约 950 字节，安全）。
 
 > 最后提醒：这是本地开发用的单机形态（单容器、默认弱密码、数据目录直接挂宿主机）。
 > 生产要用副本集 / 分片 + 独立磁盘 + 权限最小化，别照搬这里。

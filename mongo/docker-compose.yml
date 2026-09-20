@@ -13,6 +13,10 @@
 #
 # 镜像版本、超级管理员账号在同目录 .env（MONGO_VERSION / MONGO_INITDB_ROOT_*）
 #
+# 默认是「单机 + 鉴权」（standalone + --auth，鉴权由镜像入口脚本根据 MONGO_INITDB_ROOT_* 自动加上）。
+# 要多文档事务（副本集）就按 Readme「单节点副本集」开启，注意「鉴权 + 副本集」必须配 security.keyFile，
+# 否则 mongod 报 BadValue: security.keyFile is required ... 后退出（见 Readme 常见问题 16）。
+#
 # 内核 6.19 ~ 7.0.13 的机器上必须覆盖镜像默认的 GLIBC_TUNABLES，否则 mongod 会直接退出：
 #   "MongoDB cannot start: Linux kernel versions 6.19 and newer ..."（SERVER-121912，见 Readme 常见问题 14）
 services:
@@ -37,6 +41,8 @@ services:
       - ./config:/etc/mongo                       # 配置目录
       - ./script:/docker-entrypoint-initdb.d      # 首次初始化脚本
       - /etc/localtime:/etc/localtime:ro          # 容器时区跟宿主机一致
+      # 开副本集时才需要（keyFile 放这里；用命名卷是为了让 400 权限真正生效，见 Readme「单节点副本集」）：
+      # - mongo-key:/etc/mongo-key
     # 指定配置文件，必须是容器里的绝对路径：
     # 写成 ./config/mongod.conf 会被解析成 /config/mongod.conf（镜像没有设置 WORKDIR，默认是 /），
     # 而配置实际挂在 /etc/mongo 下，mongod 读不到文件会直接退出。
@@ -48,3 +54,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+
+# 开副本集时才需要（配合上面的 mongo-key 挂载，见 Readme「单节点副本集」）：
+#volumes:
+#  mongo-key:
+#    name: mongo-key        # 固定卷名，方便用 docker run 一条命令生成 keyFile
