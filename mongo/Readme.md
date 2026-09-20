@@ -355,5 +355,40 @@ cd mongo && docker compose up -d --force-recreate
     - 如果日志里不是这条报错，而是「启动后跑 60 秒左右崩」，那是 8.0.0 ~ 8.0.20 区间更老的坑（**可能损坏数据**），
       直接换成 `.env` 里的 8.0 最新补丁（当前 8.0.32）即可。
 
+15. **启动报 `Unrecognized option: storage.journal.enabled`（或其它 `Unrecognized option`）**
+
+    配置里留了 MongoDB 老版本的选项。`storage.journal.enabled` 是 4.0 之前用来关 journal 的开关，
+    WiredTiger 从 4.0 起就不允许关 journal，这个选项在 **6.1 / 7.0 起被移除**；新版 `mongod` 看到它
+    **直接报错退出**（不是告警，容器会起来就挂）：
+
+    ```text
+    Unrecognized option: storage.journal.enabled
+    try 'mongod --help' for more information
+    ```
+
+    本目录 `config/mongod.conf` 里原来有这两行，现在已经删掉：
+
+    ```yaml
+    storage:
+      dbPath: /data/db
+      # journal:
+      #   enabled: true      # ← 6.1+ 已移除，写了就启动失败
+    ```
+
+    journaling 一直是开着的，不需要（也没法）配置。改完重启容器就会重新读配置：
+
+    ```bash
+    cd mongo && docker compose restart mongo
+    ```
+
+    现在这份配置已用 **7.0.43 / 8.0.32 / 8.3.11** 三个版本的 `mongod` 实测过：都能正常启动，
+    配置里的选项没有再出现未识别/弃用告警。（8.0.32 的日志里会有几条 `Use of deprecated server parameter name`，
+    比如 `sslMode`、`wiredTigerConcurrentReadTransactions` —— 那是 MongoDB 自己内部调 `setParameter` 产生的，
+    跟本目录的配置无关，忽略即可；7.0 / 8.3 没有这几条。）
+
+    其它「老配置里常见、但现在已移除」的选项（8.0 实测报同一个错）：`net.http.enabled`（HTTP 接口 5.1 移除）、
+    `storage.mmapv1.*`（4.2 起没有 mmapv1 引擎）、`storage.indexBuildRetry`（6.0 移除）。
+    排查套路：报错信息会直接点名选项，把配置里那一行/那一段删掉或按新版文档改名即可。
+
 > 最后提醒：这是本地开发用的单机形态（单容器、默认弱密码、数据目录直接挂宿主机）。
 > 生产要用副本集 / 分片 + 独立磁盘 + 权限最小化，别照搬这里。
