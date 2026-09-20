@@ -46,8 +46,18 @@ MongoDB 单机版（文档数据库 / NoSQL），用于本地开发调试。
 
 ## 启动
 
+首次启动前先建好宿主机目录，并把它交给容器里的 `mongodb` 用户（**uid 999**）——镜像就是以 999 身份跑 `mongod` 的，
+目录属主不对的话容器会一直重启（报 `FileNotOpen` / WiredTiger `Permission denied`，见常见问题 8）：
+
 ```bash
 cd mongo
+sudo mkdir -p /data/mongodb/data/db /data/mongodb/data/log
+sudo chown -R 999:999 /data/mongodb
+```
+
+然后启动：
+
+```bash
 docker compose up -d
 docker compose ps                  # 等 STATUS 出现 (healthy)；首次启动要初始化数据目录，约 10~30 秒
 docker compose logs -f mongo       # 看到 "MongoDB init process complete; ready for start up" + "Waiting for connections" 即成功
@@ -254,18 +264,51 @@ cd mongo && docker compose up -d --force-recreate
    （注意必须同时配 `security.keyFile`，见常见问题 16）。如果连接串里带了 `replicaSet=rs0` 而实际没开副本集，
    驱动会一直找不到 primary，报 `No primary detected for set rs0` / 超时。
 
-8. **数据目录权限 / 容器一直重启并报 Permission denied**
+8. **数据目录 / 日志目录权限：容器一直重启，报 `Permission denied` 或 `FileNotOpen`**
 
-   镜像里的 `mongodb` 用户是 **uid 999 / gid 999**。如果 `/data/mongodb/data/db`、`/data/mongodb/data/log`
-   是 root 建的（比如你用 `sudo mkdir -p` 先建了目录），容器（以 999 身份跑）写不进去：
+   镜像里的 `mongodb` 用户是 **uid 999 / gid 999**，`mongod` 就是以它跑的。所以挂进去的
+   `/data/mongodb/data/db`（数据）和 `/data/mongodb/data/log`（日志）必须让 999 能写。
+   目录是 root 建的时候（`docker compose up` 第一次跑时 Docker 自己建、或你 `sudo mkdir` 建的）999 写不进去，
+   于是看到下面两类报错：
 
-   ```bash
-   sudo chown -R 999:999 /data/mongodb
-   docker compose restart mongo
+   ① 日志目录不可写 —— **挂在启动最早的一步**，日志文件还没创建，所以这条是打到 stderr（`docker compose logs mongo`）里的，
+   而不是写进 `mongod.log`（实测 8.0.32，把 `systemLog.path` 指到不可写目录时报的就是这个）：
+
+   ```text
+   {"s":"F","c":"CONTROL","id":20574,"ctx":"main","msg":"Error during global initialization",
+    "attr":{"error":{"code":38,"codeName":"FileNotOpen",
+    "errmsg":"Can't initialize rotatable log file :: caused by :: Failed to open /var/log/mongodb/mongod.log"}}}
    ```
 
-   反过来，如果你把 `user: "0:0"` 加进 compose 让容器用 root 跑，也能绕过，但那样生成的文件属主是 root，
-   下次换回 999 又会有权限问题，推荐直接用 `chown`。
+   ② 数据目录不可写 —— 日志文件能写出来了，但存储引擎起不来，报 WiredTiger 的 `Permission denied` 加断言崩溃
+   （`Fatal assertion ... wiredtiger_util.cpp`），这条在 `/data/mongodb/data/log/mongod.log` 里：
+
+   ```text
+   {"s":"E","c":"STORAGE","msg":"WiredTiger error","attr":{"error":13,...,"error_str":"Permission denied"}}
+   {"s":"F","c":"CONTROL","msg":"Fatal assertion","attr":{"msgid":50853,"file":"src/mongo/db/storage/wiredtiger/wiredtiger_util.cpp"}}
+   ```
+
+   修法（两个目录一起改，只改一个只是把①换成②）：
+
+   ```bash
+   sudo mkdir -p /data/mongodb/data/db /data/mongodb/data/log
+   sudo chown -R 999:999 /data/mongodb
+   docker compose up -d --force-recreate
+   ```
+
+   自查：
+
+   ```bash
+   docker exec mongo id                          # 应为 uid=999(mongodb) gid=999(mongodb)
+   docker exec mongo ls -ld /data/db /var/log/mongodb   # 属主应是 999
+   ```
+
+   注：宿主机开了 `userns-remap` / rootless Docker 时，容器里的 999 映射到宿主机并不是 999（常见是 100999 起，
+   以 `/etc/subuid` 为准），把上面的 `999:999` 换成映射后的 uid:gid。
+
+   反例说明：把 `user: "0:0"` 写进 compose 让容器用 root 跑**不能**绕过去 —— 镜像入口脚本开头就用
+   `gosu mongodb` 把自己切回 999（`if [ "$(id -u)" = 0 ]; then exec gosu mongodb ...`，已对着镜像里的脚本核实），
+   而且就算真用 root 跑了，生成的文件属主变成 root，下次换回 999 还得再 chown 一次。直接用 `chown` 最省事。
 
 9. **想换大版本（8.0 / 8.3 / 7.0）行不行**
 

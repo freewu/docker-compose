@@ -11,6 +11,10 @@
 #   ./config/mongod.conf -> /etc/mongo/mongod.conf              下面 command 必须写这个绝对路径（见 Readme 常见问题 2）
 #   ./script/init.sh     -> /docker-entrypoint-initdb.d/init.sh 只在数据目录为空时执行一次
 #
+# 首次启动前先建好宿主机目录、并交给容器里的 mongodb 用户（uid 999）——镜像以 999 身份跑 mongod，
+# 目录属主不对的话容器会一直重启（日志目录报 FileNotOpen、数据目录报 WiredTiger Permission denied，见 Readme 常见问题 8）：
+#   sudo mkdir -p /data/mongodb/data/db /data/mongodb/data/log && sudo chown -R 999:999 /data/mongodb
+#
 # 镜像版本、超级管理员账号在同目录 .env（MONGO_VERSION / MONGO_INITDB_ROOT_*）
 #
 # 默认是「单机 + 鉴权」（standalone + --auth，鉴权由镜像入口脚本根据 MONGO_INITDB_ROOT_* 自动加上）。
