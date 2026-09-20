@@ -23,6 +23,11 @@ MongoDB 单机版（文档数据库 / NoSQL），用于本地开发调试。
 >
 > 配置文件里写了副本集名 `rs0`、但**必须手动 `rs.initiate()` 才真正生效**（不开也能用，只是不能用多文档事务），见下面「单节点副本集」。
 
+> **内核 6.19 ~ 7.0.13 的机器注意**：官方镜像自带的 `GLIBC_TUNABLES=glibc.pthread.rseq=0` 在这段内核上会让
+> mongod 直接退出，日志是 `MongoDB cannot start: Linux kernel versions 6.19 and newer has a known incompatibility...`。
+> 这不是本目录配置写错了 —— compose 里已经把 `GLIBC_TUNABLES` 默认覆盖成 `glibc.pthread.rseq=1` 绕开它，
+> 内核自查 `uname -r`，完整对照表和其它做法见「常见问题 14」。
+
 ## 使用到的端口
 
 宿主机映射的端口（和容器内一致，1:1）：
@@ -122,6 +127,7 @@ mongodb://root:123456@192.168.110.141:27017/?authSource=admin&replicaSet=rs0
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `MONGO_VERSION` | `8.0` | 镜像 tag，固定大版本（`8.0` = LTS / `8.3` = 最新 / `7.0` = 上一代 LTS） |
+| `MONGO_GLIBC_TUNABLES` | `glibc.pthread.rseq=1` | 容器里的 `GLIBC_TUNABLES`，绕开内核 6.19 ~ 7.0.13 的启动检查；内核 < 6.19 或 ≥ 7.0.14 可改回 `glibc.pthread.rseq=0`，见常见问题 14 |
 | `MONGO_INITDB_ROOT_USERNAME` | `root` | 超级管理员用户名，**只在首次初始化时生效** |
 | `MONGO_INITDB_ROOT_PASSWORD` | `123456` | 超级管理员密码，**只在首次初始化时生效** |
 
@@ -299,6 +305,55 @@ cd mongo && docker compose up -d --force-recreate
       写了个不存在的 tag（比如 `8.0.32-alpine` 这种）。去 Docker Hub 的 `mongo` 标签页挑一个真实存在的
       tag（`8.0`、`8.0.32`、`8.0-noble`、`7.0` 等），注意 alpine 变体的 tag 形如 `8.0-alpine` 但并非每个
       版本都有，ARM/AMD64 也要对应。
+
+14. **启动就退出，日志报 `MongoDB cannot start: Linux kernel versions 6.19 and newer has a known incompatibility with this version of MongoDB`**
+
+    这是 MongoDB 的自我保护，不是本目录的配置写错了。Linux **6.19 ~ 7.0.13** 改了 `rseq` 的行为，和 MongoDB
+    内置 TCMalloc 的 per-CPU 缓存冲突（会算错缓存，甚至写坏数据），所以 8.0.21+ / 8.3.0+ 的内核检查会
+    **直接拒绝启动**（日志 `severity: F`、`id: 12257600`）。上游记录：SERVER-121912、SERVER-125742。
+
+    先确认自己的内核：
+
+    ```bash
+    uname -r            # 6.19.x / 7.0.13 及以下（含 7.0.0-28-generic 这种发行版号）落在问题区间；
+                        # 5.15 / 6.18 / 7.0.14+ / 7.1.x 都不受影响
+    ```
+
+    官方镜像里默认设了 `GLIBC_TUNABLES=glibc.pthread.rseq=0`（让 TCMalloc 自己用 rseq，性能略高），
+    正好会踩中这个检查。所以本目录在 compose 里把它覆盖成 `glibc.pthread.rseq=1`
+    （由 `.env` 的 `MONGO_GLIBC_TUNABLES` 控制）：这样在问题内核上 glibc 自己接管 rseq、TCMalloc 不再用
+    per-CPU 缓存，mongod 就能正常启动。
+
+    实测结果（拿官方 8.0.32 / 8.3.11 的 `mongod` 二进制伪造内核版本号跑出来的，两个版本行为一致）：
+
+    | 内核版本 | 镜像默认 `rseq=0` | 本目录默认 `rseq=1` |
+    |----------|:----------------:|:------------------:|
+    | < 6.19（5.15 / 6.18 …） | ✅ 正常 | ✅ 正常 |
+    | 6.19 ~ 7.0.13（含 `7.0.0-28-generic`） | ❌ 报这个错退出 | ✅ 正常 |
+    | ≥ 7.0.14 / 7.1.x | ✅ 正常 | ✅ 正常 |
+
+    想确认容器里实际生效的值：
+
+    ```bash
+    docker exec mongo env | grep GLIBC_TUNABLES     # 应该是 glibc.pthread.rseq=1
+    ```
+
+    几种可选做法：
+
+    | 做法 | 说明 |
+    |------|------|
+    | `.env` 里 `MONGO_GLIBC_TUNABLES=glibc.pthread.rseq=1`（默认） | 各内核都能起；代价是 TCMalloc 的 per-CPU 缓存用不上，本地开发基本无感 |
+    | `.env` 里 `MONGO_GLIBC_TUNABLES=glibc.pthread.rseq=0` | 只在内核 < 6.19 或 ≥ 7.0.14 时这么设，性能最接近镜像默认 |
+    | 换 `MONGO_VERSION=7.0` | 7.0 这条线没有这个内核检查，**任何内核都能跑**（代价是版本旧一代；换版本的数据目录问题见常见问题 9） |
+    | 升内核到 ≥ 7.0.14（且发行版已带 rseq 修复） | 最干净，之后 `rseq` 开不开都行 |
+    | 加 `MONGO_TCMALLOC_PER_CPU_CACHE_SIZE_BYTES=0` | 另一条绕过路径（直接关掉 TCMalloc 的 per-CPU 缓存），实测一样能起来 |
+
+    两个注意点：
+
+    - 别把 `GLIBC_TUNABLES` 设成空字符串去「取消覆盖」（compose 里空值就真是空串，glibc 会当成未设置），
+      要改就明确写 `glibc.pthread.rseq=1` 或 `glibc.pthread.rseq=0`；
+    - 如果日志里不是这条报错，而是「启动后跑 60 秒左右崩」，那是 8.0.0 ~ 8.0.20 区间更老的坑（**可能损坏数据**），
+      直接换成 `.env` 里的 8.0 最新补丁（当前 8.0.32）即可。
 
 > 最后提醒：这是本地开发用的单机形态（单容器、默认弱密码、数据目录直接挂宿主机）。
 > 生产要用副本集 / 分片 + 独立磁盘 + 权限最小化，别照搬这里。

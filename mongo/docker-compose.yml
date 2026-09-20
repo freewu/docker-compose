@@ -12,6 +12,9 @@
 #   ./script/init.sh     -> /docker-entrypoint-initdb.d/init.sh 只在数据目录为空时执行一次
 #
 # 镜像版本、超级管理员账号在同目录 .env（MONGO_VERSION / MONGO_INITDB_ROOT_*）
+#
+# 内核 6.19 ~ 7.0.13 的机器上必须覆盖镜像默认的 GLIBC_TUNABLES，否则 mongod 会直接退出：
+#   "MongoDB cannot start: Linux kernel versions 6.19 and newer ..."（SERVER-121912，见 Readme 常见问题 14）
 services:
   mongo:
     image: mongo:${MONGO_VERSION:-8.0}
@@ -21,6 +24,10 @@ services:
       # 超级管理员：只在「数据目录为空」的首次启动时创建（之后改 .env 不会改密码，见 Readme 常见问题 5）
       MONGO_INITDB_ROOT_USERNAME: "${MONGO_INITDB_ROOT_USERNAME:-root}"
       MONGO_INITDB_ROOT_PASSWORD: "${MONGO_INITDB_ROOT_PASSWORD:-123456}"
+      # 镜像里默认设了 glibc.pthread.rseq=0（TCMalloc 用自己的 rseq，性能略高），但这在内核 6.19 ~ 7.0.13 上
+      # 会触发内核兼容检查，mongod 报 "MongoDB cannot start: Linux kernel versions 6.19 and newer ..." 后退出。
+      # 所以这里默认覆盖成 rseq=1；内核 < 6.19 或 >= 7.0.14 时可以在 .env 里改回 rseq=0（见 Readme 常见问题 14）
+      GLIBC_TUNABLES: "${MONGO_GLIBC_TUNABLES:-glibc.pthread.rseq=1}"
       TZ: Asia/Shanghai
     ports:
       - "27017:27017"
