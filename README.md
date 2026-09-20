@@ -50,7 +50,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 > `redis-sentinel` 手动导出即可：`export HOST_IP=192.168.0.200 && docker compose up -d`（换成你自己的局域网 IP）
 >
 > 账号密码支持外部配置（各服务目录下 `.env`，改完重建容器生效）：
-> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）、`ActiveMQ/.env`（`ACTIVEMQ_WEB_PASSWORD`）、`postgre/.env`（`POSTGRES_PASSWORD` / `POSTGRES_VERSION`）。
+> `clickhouse/.env`（`CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD`）、`doris/.env`（`DORIS_ROOT_PASSWORD`）、`tidb/.env`（`TIDB_ROOT_PASSWORD`）、`DolphinScheduler/.env`（`DS_DB_PASSWORD` / `DS_ADMIN_PASSWORD`）、`nacos/.env`（`NACOS_ADMIN_PASSWORD` 及鉴权密钥）、`ActiveMQ/.env`（`ACTIVEMQ_WEB_PASSWORD`）、`postgre/.env`（`POSTGRES_PASSWORD` / `POSTGRES_VERSION`）、`mongo/.env`（`MONGO_INITDB_ROOT_PASSWORD` / `MONGO_VERSION`）。
 
 ## 支持服务
 
@@ -65,7 +65,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 | MQTT           | mqtt             | 18083,1883,8084,8883,8083                | 消息队列 (用于物联网)                     |
 | Portainer      | postainer        | 8001,9001                                | Docker 服务管理                         |
 | Mosquitto      | mosquitto        | 1883                                     | 消息队列 (用于物联网) 走MQTT协议           |
-| MongoDB        | mongo            | 27017                                    | 文档数据库                               |
+| MongoDB        | mongo            | 27017                                    | 文档数据库（账号/版本由 .env 提供，默认 root/123456；另有 test/123456 只读写 hi 库）|
 | Minio          | minio            | 9003,9004                                | 分布式文件存储系统                        |
 | Milvus         | milvus           | 19530,9091                               | 向量数据库                               |
 | Kafka          | kafka            | 9092,2182                                | 消息队列（`KAFKA_ADVERTISED_LISTENERS` 需同目录 .env 的 `HOST_IP`）|

@@ -1,16 +1,43 @@
-version: '3'
+# MongoDB 单机版（文档数据库），用于本地开发调试
+#
+# 端口（宿主机:容器 = 1:1）：
+#   27017  MongoDB 协议；本仓库只有 mongo 用这个端口
+#
+# 宿主机数据目录：
+#   /data/mongodb/data/db    -> /data/db           数据（镜像默认 dbPath）
+#   /data/mongodb/data/log   -> /var/log/mongodb   日志（对应 config/mongod.conf 里的 systemLog.path）
+#
+# 挂载进来的配置和初始化脚本：
+#   ./config/mongod.conf -> /etc/mongo/mongod.conf              下面 command 必须写这个绝对路径（见 Readme 常见问题 2）
+#   ./script/init.sh     -> /docker-entrypoint-initdb.d/init.sh 只在数据目录为空时执行一次
+#
+# 镜像版本、超级管理员账号在同目录 .env（MONGO_VERSION / MONGO_INITDB_ROOT_*）
 services:
   mongo:
-    image: mongo:latest
+    image: mongo:${MONGO_VERSION:-8.0}
+    container_name: mongo
     restart: always
-    ports:
-     - 27017:27017
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=123456
+      # 超级管理员：只在「数据目录为空」的首次启动时创建（之后改 .env 不会改密码，见 Readme 常见问题 5）
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_INITDB_ROOT_USERNAME:-root}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_INITDB_ROOT_PASSWORD:-123456}"
+      TZ: Asia/Shanghai
+    ports:
+      - "27017:27017"
     volumes:
-     - /data/mongodb/data/db:/data/db # 挂载数据目录
-     - /data/mongodb/data/log:/var/log/mongodb  # 挂载日志目录
-     - ./config:/etc/mongo  # 挂载配置目录
-     - ./script/:/docker-entrypoint-initdb.d # 初始化脚本
-    command: --config ./config/mongod.conf # 配置文件
+      - /data/mongodb/data/db:/data/db            # 数据目录
+      - /data/mongodb/data/log:/var/log/mongodb   # 日志目录
+      - ./config:/etc/mongo                       # 配置目录
+      - ./script:/docker-entrypoint-initdb.d      # 首次初始化脚本
+      - /etc/localtime:/etc/localtime:ro          # 容器时区跟宿主机一致
+    # 指定配置文件，必须是容器里的绝对路径：
+    # 写成 ./config/mongod.conf 会被解析成 /config/mongod.conf（镜像没有设置 WORKDIR，默认是 /），
+    # 而配置实际挂在 /etc/mongo 下，mongod 读不到文件会直接退出。
+    command: --config /etc/mongo/mongod.conf
+    healthcheck:
+      # $$ 是 compose 里的转义，容器内会变成 $MONGO_INITDB_ROOT_USERNAME / $MONGO_INITDB_ROOT_PASSWORD
+      test: ["CMD-SHELL", "mongosh --quiet --host 127.0.0.1 --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand({ping: 1}).ok' | grep -q 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
