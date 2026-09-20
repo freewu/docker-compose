@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-version: '3'
 services:
   docker-fe-01:
     image: "apache/doris:2.0.0_alpha-fe-x86_64"

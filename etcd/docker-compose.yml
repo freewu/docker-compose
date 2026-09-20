@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   etcd1:
     image: bitnami/etcd
